@@ -33,3 +33,9 @@ The source files used as the split reference are:
 - `packages/fabric/src/runtime-providers/tencent-tke.js`
 
 Future OPL Cloud changes do not automatically redefine OPL Fabric contracts. Re-baseline by recording the new OPL Cloud commit, diffing the files above plus any newly relevant contracts, and then making explicit contract-first changes in OPL Fabric.
+
+## 2026-07-04: Central Fabric config directory
+
+OPL Fabric uses `config/` as the default configuration root. Operators can move the directory and set `OPL_FABRIC_CONFIG_DIR` to the new path.
+
+The initial config catalog imports public deployment and provider key names from `/home/dev/medopl-3` at commit `d2c7474deb6deb39daf81232f563a5f39c0fdd16`. Real secrets are not imported; only key names, defaults, workspace runtime paths, readiness checks, and secretRef shapes are retained.

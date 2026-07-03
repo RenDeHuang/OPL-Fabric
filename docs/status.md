@@ -33,3 +33,5 @@ Remaining risks:
 - OPL Cloud catalog sections for environment templates, connectors, and agent packages are not yet implemented in OPL Fabric.
 - OPL Cloud deployment contract fields for ingress, image pull secrets, snapshot classes, TLS, Tencent registry, and production diagnostics are not fully represented by the current deployment skeleton.
 - No real-cluster validation has run in this environment; current Kubernetes checks are fake-client or YAML structural checks.
+- Central config now records medopl-3 TKE and Codex workspace inputs, but provider behavior still needs full PVC, Secret, Ingress, VolumeSnapshot, backup, restore, reconcile, and status implementation through Go client-go.
+- `OPL_CODEX_API_KEY` is optional until workspace Codex bootstrap is enabled for a published mutating compute API.
