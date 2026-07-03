@@ -15,6 +15,8 @@ It does not own OPL Console commercial flows, wallet and billing truth, OPL Ledg
 
 ## Local Verification
 
+The root verification command skips workspaces that have not been created yet and runs their checks once they exist.
+
 ```bash
 npm test
 ```

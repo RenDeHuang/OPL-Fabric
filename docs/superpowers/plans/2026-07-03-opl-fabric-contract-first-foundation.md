@@ -104,10 +104,10 @@ Write root `package.json`:
   "description": "Contract-first OPL Fabric resource control plane.",
   "scripts": {
     "test": "npm run test:contracts && npm run test:go && npm run test:console",
-    "test:contracts": "node --test \"tests/contracts/**/*.test.mjs\"",
-    "test:go": "go test ./apps/fabric-api/...",
-    "test:console": "npm --prefix apps/fabric-console run typecheck && npm --prefix apps/fabric-console run build",
-    "build": "npm --prefix apps/fabric-console run build"
+    "test:contracts": "test ! -d tests/contracts || node --test \"tests/contracts/**/*.test.mjs\"",
+    "test:go": "test ! -f apps/fabric-api/go.mod || (cd apps/fabric-api && go test ./...)",
+    "test:console": "test ! -f apps/fabric-console/package.json || (npm --prefix apps/fabric-console run typecheck && npm --prefix apps/fabric-console run build)",
+    "build": "test ! -f apps/fabric-console/package.json || npm --prefix apps/fabric-console run build"
   }
 }
 ```
@@ -141,6 +141,8 @@ It does not own OPL Console commercial flows, wallet and billing truth, OPL Ledg
 - Kubernetes: Go client-go
 
 ## Local Verification
+
+The root verification command skips workspaces that have not been created yet and runs their checks once they exist.
 
 ```bash
 npm test
