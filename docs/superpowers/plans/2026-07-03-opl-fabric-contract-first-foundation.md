@@ -268,6 +268,44 @@ test("contract files are valid JSON with stable identifiers", () => {
     assert.ok(parsed.$id || parsed.openapi, `${file} must expose $id or openapi`);
   }
 });
+
+test("OpenAPI path templates declare matching path parameters", () => {
+  const openapi = JSON.parse(readFileSync("contracts/fabric-api.openapi.json", "utf8"));
+  for (const [path, pathItem] of Object.entries(openapi.paths)) {
+    const templateParams = [...path.matchAll(/{([^}]+)}/g)].map((match) => match[1]);
+    if (templateParams.length === 0) continue;
+
+    for (const [method, operation] of Object.entries(pathItem)) {
+      const parameters = operation.parameters || [];
+      for (const paramName of templateParams) {
+        assert.ok(
+          parameters.some((parameter) => parameter.in === "path" && parameter.name === paramName && parameter.required === true),
+          `${method.toUpperCase()} ${path} must declare required path parameter ${paramName}`
+        );
+      }
+    }
+  }
+});
+
+test("OpenAPI operations expose generator-friendly metadata", () => {
+  const openapi = JSON.parse(readFileSync("contracts/fabric-api.openapi.json", "utf8"));
+  assert.ok(Array.isArray(openapi.servers) && openapi.servers.length > 0, "OpenAPI must declare at least one server");
+  assert.ok(Array.isArray(openapi.security) && openapi.security.length > 0, "OpenAPI must declare root security");
+
+  for (const [path, pathItem] of Object.entries(openapi.paths)) {
+    for (const [method, operation] of Object.entries(pathItem)) {
+      const label = `${method.toUpperCase()} ${path}`;
+      assert.equal(typeof operation.operationId, "string", `${label} must declare operationId`);
+      assert.ok(operation.operationId.length > 0, `${label} operationId must not be empty`);
+      assert.equal(typeof operation.summary, "string", `${label} must declare summary`);
+      assert.ok(operation.summary.length > 0, `${label} summary must not be empty`);
+      assert.ok(
+        Object.keys(operation.responses || {}).some((status) => /^4\d\d$/.test(status)),
+        `${label} must declare a 4xx response`
+      );
+    }
+  }
+});
 ```
 
 - [ ] **Step 2: Run contract test and confirm failure**
@@ -501,16 +539,109 @@ Create `contracts/fabric-api.openapi.json`:
   "openapi": "3.1.0",
   "info": {
     "title": "OPL Fabric API",
-    "version": "0.1.0"
+    "version": "0.1.0",
+    "license": {
+      "name": "Proprietary",
+      "url": "https://github.com/RenDeHuang/OPL-Fabric"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787"
+    }
+  ],
+  "security": [
+    {
+      "operatorToken": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "operatorToken": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
   },
   "paths": {
-    "/api/fabric/readiness": { "get": { "responses": { "200": { "description": "Fabric readiness" } } } },
-    "/api/fabric/catalog": { "get": { "responses": { "200": { "description": "Fabric resource catalog" } } } },
-    "/api/fabric/compute": { "post": { "responses": { "202": { "description": "Compute operation accepted" } } } },
-    "/api/fabric/storage": { "post": { "responses": { "202": { "description": "Storage operation accepted" } } } },
-    "/api/fabric/attachments": { "post": { "responses": { "202": { "description": "Attachment operation accepted" } } } },
-    "/api/fabric/workspace-routes": { "post": { "responses": { "202": { "description": "Route operation accepted" } } } },
-    "/api/fabric/operations/{operationId}": { "get": { "responses": { "200": { "description": "Operation status" } } } }
+    "/api/fabric/readiness": {
+      "get": {
+        "operationId": "getFabricReadiness",
+        "summary": "Get Fabric readiness",
+        "responses": {
+          "200": { "description": "Fabric readiness" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+    "/api/fabric/catalog": {
+      "get": {
+        "operationId": "getFabricCatalog",
+        "summary": "Get Fabric resource catalog",
+        "responses": {
+          "200": { "description": "Fabric resource catalog" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+    "/api/fabric/compute": {
+      "post": {
+        "operationId": "createFabricCompute",
+        "summary": "Create Fabric compute",
+        "responses": {
+          "202": { "description": "Compute operation accepted" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+    "/api/fabric/storage": {
+      "post": {
+        "operationId": "createFabricStorage",
+        "summary": "Create Fabric storage",
+        "responses": {
+          "202": { "description": "Storage operation accepted" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+    "/api/fabric/attachments": {
+      "post": {
+        "operationId": "createFabricAttachment",
+        "summary": "Create Fabric storage attachment",
+        "responses": {
+          "202": { "description": "Attachment operation accepted" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+    "/api/fabric/workspace-routes": {
+      "post": {
+        "operationId": "createFabricWorkspaceRoute",
+        "summary": "Create Fabric Workspace route",
+        "responses": {
+          "202": { "description": "Route operation accepted" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+    "/api/fabric/operations/{operationId}": {
+      "get": {
+        "operationId": "getFabricOperation",
+        "summary": "Get Fabric operation status",
+        "parameters": [
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Operation status" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    }
   }
 }
 ```
