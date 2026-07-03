@@ -13,6 +13,14 @@ It does not own OPL Console commercial flows, wallet and billing truth, OPL Ledg
 - DB: PostgreSQL
 - Kubernetes: Go client-go
 
+## Configuration
+
+The default configuration catalog lives in `config/`.
+
+Set `OPL_FABRIC_CONFIG_DIR=/path/to/config` when you need to use another path with the same file names.
+
+Real secrets must not be committed. Use Kubernetes Secrets, external secret refs, or ignored local env files based on `config/fabric.env.example`.
+
 ## Local Verification
 
 The root verification command skips workspaces that have not been created yet and runs their checks once they exist.
