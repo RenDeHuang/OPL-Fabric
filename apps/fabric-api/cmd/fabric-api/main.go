@@ -18,7 +18,12 @@ func main() {
 		WorkspaceDomain: cfg.WorkspaceDomain,
 		StorageClass:    cfg.StorageClass,
 	})
-	svc := service.New(service.Config{Catalog: cat})
+	svc := service.New(service.Config{
+		Catalog:             cat,
+		DatabaseURL:         cfg.DatabaseURL,
+		OperatorToken:       cfg.OperatorToken,
+		KubernetesNamespace: cfg.KubernetesNamespace,
+	})
 	handler := httpapi.NewServer(svc, httpapi.Config{OperatorToken: cfg.OperatorToken})
 
 	addr := ":" + cfg.Port

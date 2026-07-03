@@ -534,6 +534,8 @@ Create the remaining schema files with these top-level identities:
 
 Create `contracts/fabric-api.openapi.json`:
 
+The foundation contract publishes only implemented HTTP routes. Mutating compute, storage, attachment, route, backup, restore, and operation status APIs remain future contract-expansion work until their server handlers and idempotency/request bodies are implemented.
+
 ```json
 {
   "openapi": "3.1.0",
@@ -569,7 +571,14 @@ Create `contracts/fabric-api.openapi.json`:
         "operationId": "getFabricReadiness",
         "summary": "Get Fabric readiness",
         "responses": {
-          "200": { "description": "Fabric readiness" },
+          "200": {
+            "description": "Fabric readiness",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Readiness" }
+              }
+            }
+          },
           "400": { "description": "Bad request" }
         }
       }
@@ -579,65 +588,14 @@ Create `contracts/fabric-api.openapi.json`:
         "operationId": "getFabricCatalog",
         "summary": "Get Fabric resource catalog",
         "responses": {
-          "200": { "description": "Fabric resource catalog" },
-          "400": { "description": "Bad request" }
-        }
-      }
-    },
-    "/api/fabric/compute": {
-      "post": {
-        "operationId": "createFabricCompute",
-        "summary": "Create Fabric compute",
-        "responses": {
-          "202": { "description": "Compute operation accepted" },
-          "400": { "description": "Bad request" }
-        }
-      }
-    },
-    "/api/fabric/storage": {
-      "post": {
-        "operationId": "createFabricStorage",
-        "summary": "Create Fabric storage",
-        "responses": {
-          "202": { "description": "Storage operation accepted" },
-          "400": { "description": "Bad request" }
-        }
-      }
-    },
-    "/api/fabric/attachments": {
-      "post": {
-        "operationId": "createFabricAttachment",
-        "summary": "Create Fabric storage attachment",
-        "responses": {
-          "202": { "description": "Attachment operation accepted" },
-          "400": { "description": "Bad request" }
-        }
-      }
-    },
-    "/api/fabric/workspace-routes": {
-      "post": {
-        "operationId": "createFabricWorkspaceRoute",
-        "summary": "Create Fabric Workspace route",
-        "responses": {
-          "202": { "description": "Route operation accepted" },
-          "400": { "description": "Bad request" }
-        }
-      }
-    },
-    "/api/fabric/operations/{operationId}": {
-      "get": {
-        "operationId": "getFabricOperation",
-        "summary": "Get Fabric operation status",
-        "parameters": [
-          {
-            "name": "operationId",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string", "minLength": 1 }
-          }
-        ],
-        "responses": {
-          "200": { "description": "Operation status" },
+          "200": {
+            "description": "Fabric resource catalog",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Catalog" }
+              }
+            }
+          },
           "400": { "description": "Bad request" }
         }
       }

@@ -56,3 +56,19 @@ test("OpenAPI operations expose generator-friendly metadata", () => {
     }
   }
 });
+
+test("OpenAPI only publishes currently implemented HTTP routes", () => {
+  const openapi = JSON.parse(readFileSync("contracts/fabric-api.openapi.json", "utf8"));
+  assert.deepEqual(Object.keys(openapi.paths).sort(), ["/api/fabric/catalog", "/api/fabric/readiness"]);
+});
+
+test("OpenAPI success responses declare JSON schemas", () => {
+  const openapi = JSON.parse(readFileSync("contracts/fabric-api.openapi.json", "utf8"));
+  for (const [path, pathItem] of Object.entries(openapi.paths)) {
+    for (const [method, operation] of Object.entries(pathItem)) {
+      const label = `${method.toUpperCase()} ${path}`;
+      const ok = operation.responses?.["200"];
+      assert.ok(ok?.content?.["application/json"]?.schema, `${label} must declare 200 application/json schema`);
+    }
+  }
+});

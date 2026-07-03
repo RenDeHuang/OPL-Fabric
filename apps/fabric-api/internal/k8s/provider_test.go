@@ -54,6 +54,13 @@ func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 	if deploy.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort != 3000 {
 		t.Fatalf("container port mismatch")
 	}
+	resources := deploy.Spec.Template.Spec.Containers[0].Resources
+	if resources.Requests.Cpu().String() != "2" || resources.Limits.Cpu().String() != "2" {
+		t.Fatalf("cpu resources mismatch: requests=%s limits=%s", resources.Requests.Cpu(), resources.Limits.Cpu())
+	}
+	if resources.Requests.Memory().String() != "4Gi" || resources.Limits.Memory().String() != "4Gi" {
+		t.Fatalf("memory resources mismatch: requests=%s limits=%s", resources.Requests.Memory(), resources.Limits.Memory())
+	}
 	if deploy.Spec.Selector.MatchLabels["oplcloud.cn/compute-key"] == "" {
 		t.Fatalf("selector missing label-safe compute key")
 	}

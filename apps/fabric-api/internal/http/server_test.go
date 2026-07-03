@@ -11,7 +11,7 @@ import (
 )
 
 func TestReadinessEndpoint(t *testing.T) {
-	svc := service.New(service.Config{Catalog: testCatalog()})
+	svc := service.New(testServiceConfig())
 	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fabric/readiness", nil)
@@ -65,9 +65,51 @@ func TestReadinessEndpoint(t *testing.T) {
 	}
 }
 
+func TestReadinessReportsMissingRuntimeConfig(t *testing.T) {
+	svc := service.New(service.Config{Catalog: testCatalog()})
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/fabric/readiness", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var readiness struct {
+		Ready       bool     `json:"ready"`
+		MissingEnv  []string `json:"missingEnv"`
+		Blockers    []string `json:"blockers"`
+		RepairHints []string `json:"repairHints"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&readiness); err != nil {
+		t.Fatalf("decode readiness: %v", err)
+	}
+
+	if readiness.Ready {
+		t.Fatal("ready = true, want false")
+	}
+	if len(readiness.MissingEnv) == 0 {
+		t.Fatal("missingEnv should report missing runtime config")
+	}
+	if len(readiness.Blockers) == 0 {
+		t.Fatal("blockers should report missing runtime config")
+	}
+	if len(readiness.RepairHints) == 0 {
+		t.Fatal("repairHints should explain missing runtime config")
+	}
+}
+
 func TestCatalogEndpoint(t *testing.T) {
 	cat := testCatalog()
-	svc := service.New(service.Config{Catalog: cat})
+	svc := service.New(service.Config{
+		Catalog:             cat,
+		DatabaseURL:         "postgres://user:pass@db:5432/opl_fabric",
+		OperatorToken:       "test-token",
+		KubernetesNamespace: "opl-cloud",
+	})
 	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fabric/catalog", nil)
@@ -106,7 +148,7 @@ func TestCatalogEndpoint(t *testing.T) {
 }
 
 func TestServerRequiresOperatorToken(t *testing.T) {
-	svc := service.New(service.Config{Catalog: testCatalog()})
+	svc := service.New(testServiceConfig())
 	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
 	for _, tc := range []struct {
@@ -134,7 +176,7 @@ func TestServerRequiresOperatorToken(t *testing.T) {
 }
 
 func TestServerRejectsRequestsWhenOperatorTokenIsNotConfigured(t *testing.T) {
-	svc := service.New(service.Config{Catalog: testCatalog()})
+	svc := service.New(testServiceConfig())
 	server := NewServer(svc, Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fabric/readiness", nil)
@@ -149,7 +191,7 @@ func TestServerRejectsRequestsWhenOperatorTokenIsNotConfigured(t *testing.T) {
 }
 
 func TestServerMethodAndPathHandling(t *testing.T) {
-	svc := service.New(service.Config{Catalog: testCatalog()})
+	svc := service.New(testServiceConfig())
 	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
 	methodReq := httptest.NewRequest(http.MethodPost, "/api/fabric/readiness", nil)
@@ -175,4 +217,13 @@ func testCatalog() catalog.Catalog {
 		WorkspaceDomain: "workspace.medopl.cn",
 		StorageClass:    "cbs",
 	})
+}
+
+func testServiceConfig() service.Config {
+	return service.Config{
+		Catalog:             testCatalog(),
+		DatabaseURL:         "postgres://user:pass@db:5432/opl_fabric",
+		OperatorToken:       "test-token",
+		KubernetesNamespace: "opl-cloud",
+	}
 }

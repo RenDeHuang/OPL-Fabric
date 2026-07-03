@@ -10,6 +10,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -59,6 +60,10 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 						Name:  "workspace",
 						Image: p.WorkspaceImage,
 						Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: 3000}},
+						Resources: corev1.ResourceRequirements{
+							Requests: resourceList(input),
+							Limits:   resourceList(input),
+						},
 						Env: []corev1.EnvVar{
 							{Name: "OPL_COMPUTE_ID", Value: input.ID},
 							{Name: "OPL_WORKSPACE_NAME", Value: input.WorkspaceName},
@@ -129,6 +134,17 @@ func boundedName(prefix, id string, limit int) string {
 func shortHash(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])[:8]
+}
+
+func resourceList(input CreateComputeInput) corev1.ResourceList {
+	resources := corev1.ResourceList{}
+	if input.CPU > 0 {
+		resources[corev1.ResourceCPU] = resource.MustParse(fmt.Sprintf("%d", input.CPU))
+	}
+	if input.MemoryGB > 0 {
+		resources[corev1.ResourceMemory] = resource.MustParse(fmt.Sprintf("%dGi", input.MemoryGB))
+	}
+	return resources
 }
 
 func ptr[T any](value T) *T {
