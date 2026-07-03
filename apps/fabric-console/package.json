@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test:source": "node --test \"tests/**/*.test.mjs\"",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build"
   },
@@ -14,6 +15,7 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.0",

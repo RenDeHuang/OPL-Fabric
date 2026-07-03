@@ -2243,7 +2243,18 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:8787"
+      "/api": {
+        target: "http://127.0.0.1:8787",
+        changeOrigin: true,
+        configure(proxy) {
+          proxy.on("proxyReq", (proxyReq) => {
+            const token = process.env.OPL_OPERATOR_TOKEN;
+            if (token) {
+              proxyReq.setHeader("Authorization", `Bearer ${token}`);
+            }
+          });
+        }
+      }
     }
   }
 });
@@ -2297,13 +2308,7 @@ export interface WorkspacePackage {
 }
 
 export async function fetchReadiness(): Promise<Readiness> {
-  const token = import.meta.env.VITE_OPL_OPERATOR_TOKEN;
-  if (!token) {
-    throw new Error("operator_token_missing");
-  }
-  const response = await fetch("/api/fabric/readiness", {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const response = await fetch("/api/fabric/readiness");
   if (!response.ok) {
     throw new Error(`readiness_failed:${response.status}`);
   }

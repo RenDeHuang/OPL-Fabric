@@ -70,31 +70,34 @@ export interface IngressDomain {
 export class FabricApiError extends Error {
   readonly status?: number;
 
-  constructor(message: string, status?: number) {
-    super(message);
+  constructor(message: string, status?: number, cause?: unknown) {
+    super(message, { cause });
     this.name = "FabricApiError";
     this.status = status;
   }
 }
 
-function operatorToken(): string {
-  const token = import.meta.env.VITE_OPL_OPERATOR_TOKEN;
-  if (!token) {
-    throw new FabricApiError("VITE_OPL_OPERATOR_TOKEN is not configured for this operator console.");
-  }
-  return token;
-}
-
 export async function fetchReadiness(): Promise<Readiness> {
-  const response = await fetch("/api/fabric/readiness", {
-    headers: {
-      Authorization: `Bearer ${operatorToken()}`
-    }
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/fabric/readiness");
+  } catch (error) {
+    throw new FabricApiError("Fabric API is unreachable. Check the console proxy or API service.", undefined, error);
+  }
 
   if (!response.ok) {
-    throw new FabricApiError(`Fabric readiness request failed with status ${response.status}.`, response.status);
+    throw new FabricApiError(readinessErrorMessage(response.status), response.status);
   }
 
   return response.json() as Promise<Readiness>;
+}
+
+function readinessErrorMessage(status: number): string {
+  if (status === 401) {
+    return "Fabric API rejected the operator session. Check server-side operator token configuration.";
+  }
+  if (status === 403) {
+    return "Fabric API denied the operator session.";
+  }
+  return `Fabric readiness request failed with status ${status}.`;
 }
