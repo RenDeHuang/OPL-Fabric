@@ -22,4 +22,10 @@ func TestDefaultCatalogPackages(t *testing.T) {
 	if gpu.ID != "gpu" || gpu.Available || gpu.UnavailableReason != "gpu_node_pool_not_verified" {
 		t.Fatalf("gpu package mismatch: %+v", gpu)
 	}
+
+	for _, profile := range catalog.ComputeProfiles {
+		if profile.Accelerator == "" {
+			t.Fatalf("compute profile %s missing accelerator", profile.ID)
+		}
+	}
 }

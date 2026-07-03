@@ -34,12 +34,13 @@ type WorkspacePackage struct {
 }
 
 type ComputeProfile struct {
-	ID        string `json:"id"`
-	Provider  string `json:"provider"`
-	CPU       int    `json:"cpu"`
-	MemoryGB  int    `json:"memoryGb"`
-	GPU       int    `json:"gpu"`
-	Available bool   `json:"available"`
+	ID          string `json:"id"`
+	Accelerator string `json:"accelerator"`
+	Provider    string `json:"provider"`
+	CPU         int    `json:"cpu"`
+	MemoryGB    int    `json:"memoryGb"`
+	GPU         int    `json:"gpu"`
+	Available   bool   `json:"available"`
 }
 
 type StorageClass struct {
@@ -75,9 +76,9 @@ func DefaultCatalog(cfg Config) Catalog {
 			{ID: "gpu", Name: "GPU Workspace", Accelerator: "gpu", CPU: 16, MemoryGB: 64, GPU: 1, Server: "16c64g-1gpu", DiskGB: 500, Available: false, UnavailableReason: "gpu_node_pool_not_verified", ComputeProfileID: "gpu-standard", StorageClassID: "workspace-cbs", WorkspaceImageID: "one-person-lab-app", IngressDomainID: "workspace"},
 		},
 		ComputeProfiles: []ComputeProfile{
-			{ID: "cpu-basic", Provider: "tencent-tke", CPU: 2, MemoryGB: 4, GPU: 0, Available: true},
-			{ID: "cpu-pro", Provider: "tencent-tke", CPU: 8, MemoryGB: 16, GPU: 0, Available: true},
-			{ID: "gpu-standard", Provider: "tencent-tke", CPU: 16, MemoryGB: 64, GPU: 1, Available: false},
+			{ID: "cpu-basic", Accelerator: "cpu", Provider: "tencent-tke", CPU: 2, MemoryGB: 4, GPU: 0, Available: true},
+			{ID: "cpu-pro", Accelerator: "cpu", Provider: "tencent-tke", CPU: 8, MemoryGB: 16, GPU: 0, Available: true},
+			{ID: "gpu-standard", Accelerator: "gpu", Provider: "tencent-tke", CPU: 16, MemoryGB: 64, GPU: 1, Available: false},
 		},
 		StorageClasses:  []StorageClass{{ID: "workspace-cbs", Provider: "tencent-tke", StorageClassName: cfg.StorageClass, AccessMode: "ReadWriteOnce", Available: true}},
 		WorkspaceImages: []WorkspaceImage{{ID: "one-person-lab-app", Image: cfg.WorkspaceImage, Port: 3000, PersistentMounts: []string{"/data", "/projects"}, Available: true}},

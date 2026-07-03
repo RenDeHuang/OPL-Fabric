@@ -682,12 +682,6 @@ Write `apps/fabric-api/go.mod`:
 module github.com/RenDeHuang/OPL-Fabric/apps/fabric-api
 
 go 1.22.2
-
-require (
-	k8s.io/api v0.29.3
-	k8s.io/apimachinery v0.29.3
-	k8s.io/client-go v0.29.3
-)
 ```
 
 Replace `go.work` with:
@@ -710,12 +704,48 @@ import "testing"
 func TestDestroyStorageRequiresConfirmation(t *testing.T) {
 	resource := StorageVolume{ID: "storage-1", State: StorageAvailable}
 
-	err := CanDestroyStorage(resource, DestroyStorageRequest{})
-	if err == nil {
-		t.Fatal("expected destroy storage without confirmation to fail")
+	tests := []struct {
+		name    string
+		storage StorageVolume
+		req     DestroyStorageRequest
+		wantErr error
+	}{
+		{
+			name:    "missing_requested_by",
+			storage: resource,
+			req:     DestroyStorageRequest{Confirm: true},
+			wantErr: ErrRequestedByRequired,
+		},
+		{
+			name:    "missing_confirmation",
+			storage: resource,
+			req:     DestroyStorageRequest{RequestedBy: "operator"},
+			wantErr: ErrStorageDestroyRequiresConfirmation,
+		},
+		{
+			name:    "missing_storage_id",
+			storage: StorageVolume{State: StorageAvailable},
+			req:     DestroyStorageRequest{Confirm: true, RequestedBy: "operator"},
+			wantErr: ErrStorageIDRequired,
+		},
+		{
+			name:    "already_destroyed",
+			storage: StorageVolume{ID: "storage-1", State: StorageDestroyed},
+			req:     DestroyStorageRequest{Confirm: true, RequestedBy: "operator"},
+			wantErr: ErrStorageAlreadyDestroyed,
+		},
 	}
 
-	err = CanDestroyStorage(resource, DestroyStorageRequest{Confirm: true, RequestedBy: "operator"})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CanDestroyStorage(tt.storage, tt.req)
+			if err != tt.wantErr {
+				t.Fatalf("error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+
+	err := CanDestroyStorage(resource, DestroyStorageRequest{Confirm: true, RequestedBy: "operator"})
 	if err != nil {
 		t.Fatalf("expected confirmed destroy storage to pass: %v", err)
 	}
@@ -834,11 +864,19 @@ import "errors"
 var (
 	ErrStorageDestroyRequiresConfirmation = errors.New("storage_destroy_requires_confirmation")
 	ErrRequestedByRequired                = errors.New("requested_by_required")
+	ErrStorageIDRequired                  = errors.New("storage_id_required")
+	ErrStorageAlreadyDestroyed            = errors.New("storage_already_destroyed")
 )
 
 func CanDestroyStorage(storage StorageVolume, req DestroyStorageRequest) error {
 	if req.RequestedBy == "" {
 		return ErrRequestedByRequired
+	}
+	if storage.ID == "" {
+		return ErrStorageIDRequired
+	}
+	if storage.State == StorageDestroyed || storage.State == StorageDestroying {
+		return ErrStorageAlreadyDestroyed
 	}
 	if !req.Confirm && req.HumanGateID == "" {
 		return ErrStorageDestroyRequiresConfirmation
@@ -880,6 +918,12 @@ func TestDefaultCatalogPackages(t *testing.T) {
 	gpu := catalog.WorkspacePackages[2]
 	if gpu.ID != "gpu" || gpu.Available || gpu.UnavailableReason != "gpu_node_pool_not_verified" {
 		t.Fatalf("gpu package mismatch: %+v", gpu)
+	}
+
+	for _, profile := range catalog.ComputeProfiles {
+		if profile.Accelerator == "" {
+			t.Fatalf("compute profile %s missing accelerator", profile.ID)
+		}
 	}
 }
 ```
@@ -925,12 +969,13 @@ type WorkspacePackage struct {
 }
 
 type ComputeProfile struct {
-	ID        string `json:"id"`
-	Provider  string `json:"provider"`
-	CPU       int    `json:"cpu"`
-	MemoryGB  int    `json:"memoryGb"`
-	GPU       int    `json:"gpu"`
-	Available bool   `json:"available"`
+	ID          string `json:"id"`
+	Accelerator string `json:"accelerator"`
+	Provider    string `json:"provider"`
+	CPU         int    `json:"cpu"`
+	MemoryGB    int    `json:"memoryGb"`
+	GPU         int    `json:"gpu"`
+	Available   bool   `json:"available"`
 }
 
 type StorageClass struct {
@@ -966,9 +1011,9 @@ func DefaultCatalog(cfg Config) Catalog {
 			{ID: "gpu", Name: "GPU Workspace", Accelerator: "gpu", CPU: 16, MemoryGB: 64, GPU: 1, Server: "16c64g-1gpu", DiskGB: 500, Available: false, UnavailableReason: "gpu_node_pool_not_verified", ComputeProfileID: "gpu-standard", StorageClassID: "workspace-cbs", WorkspaceImageID: "one-person-lab-app", IngressDomainID: "workspace"},
 		},
 		ComputeProfiles: []ComputeProfile{
-			{ID: "cpu-basic", Provider: "tencent-tke", CPU: 2, MemoryGB: 4, GPU: 0, Available: true},
-			{ID: "cpu-pro", Provider: "tencent-tke", CPU: 8, MemoryGB: 16, GPU: 0, Available: true},
-			{ID: "gpu-standard", Provider: "tencent-tke", CPU: 16, MemoryGB: 64, GPU: 1, Available: false},
+			{ID: "cpu-basic", Accelerator: "cpu", Provider: "tencent-tke", CPU: 2, MemoryGB: 4, GPU: 0, Available: true},
+			{ID: "cpu-pro", Accelerator: "cpu", Provider: "tencent-tke", CPU: 8, MemoryGB: 16, GPU: 0, Available: true},
+			{ID: "gpu-standard", Accelerator: "gpu", Provider: "tencent-tke", CPU: 16, MemoryGB: 64, GPU: 1, Available: false},
 		},
 		StorageClasses:  []StorageClass{{ID: "workspace-cbs", Provider: "tencent-tke", StorageClassName: cfg.StorageClass, AccessMode: "ReadWriteOnce", Available: true}},
 		WorkspaceImages: []WorkspaceImage{{ID: "one-person-lab-app", Image: cfg.WorkspaceImage, Port: 3000, PersistentMounts: []string{"/data", "/projects"}, Available: true}},
