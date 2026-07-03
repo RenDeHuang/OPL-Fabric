@@ -1,0 +1,106 @@
+package httpapi
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/catalog"
+	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/service"
+)
+
+func TestReadinessEndpoint(t *testing.T) {
+	svc := service.New(service.Config{Catalog: testCatalog()})
+	server := NewServer(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/fabric/readiness", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+
+	var readiness struct {
+		Ready           bool     `json:"ready"`
+		Provider        string   `json:"provider"`
+		MissingEnv      []string `json:"missingEnv"`
+		ResourceCatalog string   `json:"resourceCatalog"`
+		Blockers        []string `json:"blockers"`
+		RepairHints     []string `json:"repairHints"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&readiness); err != nil {
+		t.Fatalf("decode readiness: %v", err)
+	}
+
+	if !readiness.Ready {
+		t.Fatal("ready = false, want true")
+	}
+	if readiness.Provider != "tencent-tke" {
+		t.Fatalf("provider = %q, want tencent-tke", readiness.Provider)
+	}
+	if readiness.ResourceCatalog != "available" {
+		t.Fatalf("resourceCatalog = %q, want available", readiness.ResourceCatalog)
+	}
+	if len(readiness.MissingEnv) != 0 {
+		t.Fatalf("missingEnv = %v, want empty", readiness.MissingEnv)
+	}
+	if len(readiness.Blockers) != 0 {
+		t.Fatalf("blockers = %v, want empty", readiness.Blockers)
+	}
+	if len(readiness.RepairHints) != 0 {
+		t.Fatalf("repairHints = %v, want empty", readiness.RepairHints)
+	}
+}
+
+func TestCatalogEndpoint(t *testing.T) {
+	cat := testCatalog()
+	svc := service.New(service.Config{Catalog: cat})
+	server := NewServer(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/fabric/catalog", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+
+	var got catalog.Catalog
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode catalog: %v", err)
+	}
+
+	if got.SchemaVersion != cat.SchemaVersion {
+		t.Fatalf("schemaVersion = %d, want %d", got.SchemaVersion, cat.SchemaVersion)
+	}
+	if got.Owner != cat.Owner {
+		t.Fatalf("owner = %q, want %q", got.Owner, cat.Owner)
+	}
+	if len(got.WorkspacePackages) != len(cat.WorkspacePackages) {
+		t.Fatalf("workspace package count = %d, want %d", len(got.WorkspacePackages), len(cat.WorkspacePackages))
+	}
+	if got.WorkspacePackages[0].ID != "basic" {
+		t.Fatalf("first workspace package ID = %q, want basic", got.WorkspacePackages[0].ID)
+	}
+	if got.StorageClasses[0].StorageClassName != "cbs" {
+		t.Fatalf("storage class = %q, want cbs", got.StorageClasses[0].StorageClassName)
+	}
+}
+
+func testCatalog() catalog.Catalog {
+	return catalog.DefaultCatalog(catalog.Config{
+		WorkspaceImage:  "ghcr.io/gaofeng21cn/one-person-lab-app:latest",
+		WorkspaceDomain: "workspace.medopl.cn",
+		StorageClass:    "cbs",
+	})
+}
