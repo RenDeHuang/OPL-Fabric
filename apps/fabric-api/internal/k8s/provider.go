@@ -17,9 +17,19 @@ import (
 )
 
 type Provider struct {
-	Client         kubernetes.Interface
-	Namespace      string
-	WorkspaceImage string
+	Client               kubernetes.Interface
+	Namespace            string
+	WorkspaceImage       string
+	WorkspaceWebUIPort   int32
+	WorkspaceDataDir     string
+	WorkspaceProjectsDir string
+	CodexHome            string
+	CodexModel           string
+	CodexReasoningEffort string
+	CodexBaseURL         string
+	CodexAPIKey          string
+	CodexModelProvider   string
+	CodexProviderName    string
 }
 
 type CreateComputeInput struct {
@@ -46,6 +56,13 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 	annotations := map[string]string{
 		"oplcloud.cn/compute-id": input.ID,
 	}
+	codexSecretName := ""
+	if secret := p.codexSecret(name, labels); secret != nil {
+		if _, err := p.Client.CoreV1().Secrets(p.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+			return CreateComputeResult{}, err
+		}
+		codexSecretName = secret.Name
+	}
 
 	deploy := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: p.Namespace, Labels: labels, Annotations: annotations},
@@ -59,15 +76,20 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 					Containers: []corev1.Container{{
 						Name:  "workspace",
 						Image: p.WorkspaceImage,
-						Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: 3000}},
+						Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: p.workspaceWebUIPort()}},
 						Resources: corev1.ResourceRequirements{
 							Requests: resourceList(input),
 							Limits:   resourceList(input),
 						},
+						EnvFrom: p.codexEnvFrom(codexSecretName),
 						Env: []corev1.EnvVar{
 							{Name: "OPL_COMPUTE_ID", Value: input.ID},
 							{Name: "OPL_WORKSPACE_NAME", Value: input.WorkspaceName},
 							{Name: "OPL_PACKAGE_ID", Value: input.PackageID},
+							{Name: "OPL_PROJECTS_DIR", Value: defaultString(p.WorkspaceProjectsDir, "/projects")},
+							{Name: "OPL_WEBUI_AUTH_MODE", Value: "none"},
+							{Name: "OPL_WORKSPACE_ROOT", Value: defaultString(p.WorkspaceProjectsDir, "/projects")},
+							{Name: "CODEX_HOME", Value: defaultString(p.CodexHome, "/data/codex")},
 						},
 					}},
 				},
@@ -75,6 +97,11 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 		},
 	}
 	if _, err := p.Client.AppsV1().Deployments(p.Namespace).Create(ctx, deploy, metav1.CreateOptions{}); err != nil {
+		if codexSecretName != "" {
+			if deleteErr := p.Client.CoreV1().Secrets(p.Namespace).Delete(ctx, codexSecretName, metav1.DeleteOptions{}); deleteErr != nil {
+				return CreateComputeResult{}, errors.Join(err, fmt.Errorf("cleanup secret %q: %w", codexSecretName, deleteErr))
+			}
+		}
 		return CreateComputeResult{}, err
 	}
 
@@ -82,12 +109,17 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: p.Namespace, Labels: labels},
 		Spec: corev1.ServiceSpec{
 			Selector: labels,
-			Ports:    []corev1.ServicePort{{Name: "http", Port: 3000, TargetPort: intstr.FromInt(3000)}},
+			Ports:    []corev1.ServicePort{{Name: "http", Port: p.workspaceWebUIPort(), TargetPort: intstr.FromInt(int(p.workspaceWebUIPort()))}},
 		},
 	}
 	if _, err := p.Client.CoreV1().Services(p.Namespace).Create(ctx, service, metav1.CreateOptions{}); err != nil {
 		if deleteErr := p.Client.AppsV1().Deployments(p.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); deleteErr != nil {
 			return CreateComputeResult{}, errors.Join(err, fmt.Errorf("cleanup deployment %q: %w", name, deleteErr))
+		}
+		if codexSecretName != "" {
+			if deleteErr := p.Client.CoreV1().Secrets(p.Namespace).Delete(ctx, codexSecretName, metav1.DeleteOptions{}); deleteErr != nil {
+				return CreateComputeResult{}, errors.Join(err, fmt.Errorf("cleanup secret %q: %w", codexSecretName, deleteErr))
+			}
 		}
 		return CreateComputeResult{}, err
 	}
@@ -145,6 +177,54 @@ func resourceList(input CreateComputeInput) corev1.ResourceList {
 		resources[corev1.ResourceMemory] = resource.MustParse(fmt.Sprintf("%dGi", input.MemoryGB))
 	}
 	return resources
+}
+
+func (p Provider) workspaceWebUIPort() int32 {
+	if p.WorkspaceWebUIPort > 0 {
+		return p.WorkspaceWebUIPort
+	}
+	return 3000
+}
+
+func (p Provider) codexSecret(name string, labels map[string]string) *corev1.Secret {
+	data := map[string][]byte{}
+	put := func(key, value string) {
+		if value != "" {
+			data[key] = []byte(value)
+		}
+	}
+	put("OPL_CODEX_MODEL", p.CodexModel)
+	put("OPL_CODEX_REASONING_EFFORT", p.CodexReasoningEffort)
+	put("OPL_CODEX_BASE_URL", p.CodexBaseURL)
+	put("OPL_CODEX_API_KEY", p.CodexAPIKey)
+	put("OPL_CODEX_MODEL_PROVIDER", p.CodexModelProvider)
+	put("OPL_CODEX_PROVIDER_NAME", p.CodexProviderName)
+	if len(data) == 0 {
+		return nil
+	}
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name + "-env", Namespace: p.Namespace, Labels: labels},
+		Type:       corev1.SecretTypeOpaque,
+		Data:       data,
+	}
+}
+
+func (p Provider) codexEnvFrom(secretName string) []corev1.EnvFromSource {
+	if secretName == "" {
+		return nil
+	}
+	return []corev1.EnvFromSource{{
+		SecretRef: &corev1.SecretEnvSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+		},
+	}}
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func ptr[T any](value T) *T {

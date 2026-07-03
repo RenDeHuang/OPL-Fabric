@@ -165,6 +165,81 @@ func TestCreateComputeReportsCleanupFailure(t *testing.T) {
 	}
 }
 
+func TestCreateComputeInjectsWorkspaceRuntimeConfig(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{
+		Client:               client,
+		Namespace:            "opl-cloud",
+		WorkspaceImage:       "workspace:latest",
+		WorkspaceWebUIPort:   3000,
+		WorkspaceDataDir:     "/data",
+		WorkspaceProjectsDir: "/projects",
+		CodexHome:            "/data/codex",
+	}
+
+	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-runtime", WorkspaceName: "Runtime", PackageID: "basic"})
+	if err != nil {
+		t.Fatalf("CreateCompute: %v", err)
+	}
+
+	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
+	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("deployment missing: %v", err)
+	}
+
+	env := map[string]string{}
+	for _, item := range deploy.Spec.Template.Spec.Containers[0].Env {
+		env[item.Name] = item.Value
+	}
+	for key, want := range map[string]string{
+		"OPL_PROJECTS_DIR":    "/projects",
+		"OPL_WEBUI_AUTH_MODE": "none",
+		"OPL_WORKSPACE_ROOT":  "/projects",
+		"CODEX_HOME":          "/data/codex",
+	} {
+		if env[key] != want {
+			t.Fatalf("%s = %q, want %q", key, env[key], want)
+		}
+	}
+}
+
+func TestCreateComputeAddsCodexSecretEnvWhenConfigured(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{
+		Client:               client,
+		Namespace:            "opl-cloud",
+		WorkspaceImage:       "workspace:latest",
+		WorkspaceWebUIPort:   3000,
+		WorkspaceDataDir:     "/data",
+		WorkspaceProjectsDir: "/projects",
+		CodexHome:            "/data/codex",
+		CodexModel:           "gpt-5.5",
+		CodexReasoningEffort: "xhigh",
+		CodexBaseURL:         "https://gflabtoken.cn/v1",
+		CodexAPIKey:          "secret",
+		CodexModelProvider:   "gflabtoken",
+		CodexProviderName:    "gflabtoken",
+	}
+
+	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-codex", WorkspaceName: "Codex", PackageID: "basic"})
+	if err != nil {
+		t.Fatalf("CreateCompute: %v", err)
+	}
+
+	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
+	secret, err := client.CoreV1().Secrets("opl-cloud").Get(context.Background(), name+"-env", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("secret missing: %v", err)
+	}
+
+	for _, key := range []string{"OPL_CODEX_MODEL", "OPL_CODEX_REASONING_EFFORT", "OPL_CODEX_BASE_URL", "OPL_CODEX_API_KEY"} {
+		if len(secret.Data[key]) == 0 {
+			t.Fatalf("secret missing %s", key)
+		}
+	}
+}
+
 var _ = appsv1.Deployment{}
 var _ = corev1.Service{}
 var _ kubernetes.Interface = fake.NewSimpleClientset()
