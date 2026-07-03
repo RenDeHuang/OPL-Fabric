@@ -1332,6 +1332,7 @@ Create `apps/fabric-api/internal/postgres/store_test.go`:
 package postgres
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -1353,6 +1354,30 @@ func TestSchemaContainsRequiredTables(t *testing.T) {
 		if !strings.Contains(SchemaSQL, "CREATE TABLE IF NOT EXISTS "+table) {
 			t.Fatalf("schema missing table %s", table)
 		}
+	}
+}
+
+func TestSchemaContainsPersistenceConstraints(t *testing.T) {
+	required := []string{
+		"compute_id TEXT NOT NULL REFERENCES compute_resources(id)",
+		"storage_id TEXT NOT NULL REFERENCES storage_volumes(id)",
+		"operation_id TEXT NOT NULL REFERENCES fabric_operations(id)",
+		"operation_id TEXT NOT NULL UNIQUE REFERENCES fabric_operations(id)",
+		"idempotency_key TEXT NOT NULL UNIQUE",
+		"CHECK (size_gb > 0)",
+		"CHECK (sha256 ~ '^[A-Fa-f0-9]{64}$')",
+	}
+	for _, fragment := range required {
+		if !strings.Contains(SchemaSQL, fragment) {
+			t.Fatalf("schema missing constraint fragment %q", fragment)
+		}
+	}
+}
+
+func TestNilStoreMigrateReturnsError(t *testing.T) {
+	var store *Store
+	if err := store.Migrate(context.Background()); err != ErrStoreNotOpen {
+		t.Fatalf("error = %v, want %v", err, ErrStoreNotOpen)
 	}
 }
 ```
@@ -1396,15 +1421,15 @@ CREATE TABLE IF NOT EXISTS storage_volumes (
   package_id TEXT NOT NULL,
   state TEXT NOT NULL,
   provider_ref TEXT NOT NULL DEFAULT '',
-  size_gb INTEGER NOT NULL,
+  size_gb INTEGER NOT NULL CHECK (size_gb > 0),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS storage_attachments (
   id TEXT PRIMARY KEY,
-  compute_id TEXT NOT NULL,
-  storage_id TEXT NOT NULL,
+  compute_id TEXT NOT NULL REFERENCES compute_resources(id),
+  storage_id TEXT NOT NULL REFERENCES storage_volumes(id),
   state TEXT NOT NULL,
   mount_path TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -1414,7 +1439,7 @@ CREATE TABLE IF NOT EXISTS storage_attachments (
 CREATE TABLE IF NOT EXISTS workspace_routes (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
-  compute_id TEXT NOT NULL,
+  compute_id TEXT NOT NULL REFERENCES compute_resources(id),
   state TEXT NOT NULL,
   host TEXT NOT NULL,
   path TEXT NOT NULL,
@@ -1424,7 +1449,7 @@ CREATE TABLE IF NOT EXISTS workspace_routes (
 
 CREATE TABLE IF NOT EXISTS storage_backups (
   id TEXT PRIMARY KEY,
-  storage_id TEXT NOT NULL,
+  storage_id TEXT NOT NULL REFERENCES storage_volumes(id),
   state TEXT NOT NULL,
   provider_ref TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -1434,7 +1459,7 @@ CREATE TABLE IF NOT EXISTS storage_backups (
 CREATE TABLE IF NOT EXISTS fabric_operations (
   id TEXT PRIMARY KEY,
   correlation_id TEXT NOT NULL,
-  idempotency_key TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
   requested_by TEXT NOT NULL,
   resource_id TEXT NOT NULL,
   resource_kind TEXT NOT NULL,
@@ -1445,7 +1470,7 @@ CREATE TABLE IF NOT EXISTS fabric_operations (
 
 CREATE TABLE IF NOT EXISTS fabric_events (
   id TEXT PRIMARY KEY,
-  operation_id TEXT NOT NULL,
+  operation_id TEXT NOT NULL REFERENCES fabric_operations(id),
   event_name TEXT NOT NULL,
   payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -1453,10 +1478,10 @@ CREATE TABLE IF NOT EXISTS fabric_events (
 
 CREATE TABLE IF NOT EXISTS fabric_evidence_refs (
   id TEXT PRIMARY KEY,
-  operation_id TEXT NOT NULL,
+  operation_id TEXT NOT NULL REFERENCES fabric_operations(id),
   kind TEXT NOT NULL,
   ref TEXT NOT NULL,
-  sha256 TEXT NOT NULL,
+  sha256 TEXT NOT NULL CHECK (sha256 ~ '^[A-Fa-f0-9]{64}$'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -1472,7 +1497,7 @@ CREATE TABLE IF NOT EXISTS human_gates (
 
 CREATE TABLE IF NOT EXISTS idempotency_keys (
   key TEXT PRIMARY KEY,
-  operation_id TEXT NOT NULL,
+  operation_id TEXT NOT NULL UNIQUE REFERENCES fabric_operations(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -1497,9 +1522,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrStoreNotOpen = errors.New("postgres_store_not_open")
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -1520,6 +1548,9 @@ func (s *Store) Close() {
 }
 
 func (s *Store) Migrate(ctx context.Context) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
 	_, err := s.pool.Exec(ctx, SchemaSQL)
 	return err
 }
