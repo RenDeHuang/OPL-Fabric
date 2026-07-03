@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -80,7 +81,9 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 		},
 	}
 	if _, err := p.Client.CoreV1().Services(p.Namespace).Create(ctx, service, metav1.CreateOptions{}); err != nil {
-		_ = p.Client.AppsV1().Deployments(p.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		if deleteErr := p.Client.AppsV1().Deployments(p.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); deleteErr != nil {
+			return CreateComputeResult{}, errors.Join(err, fmt.Errorf("cleanup deployment %q: %w", name, deleteErr))
+		}
 		return CreateComputeResult{}, err
 	}
 

@@ -1597,6 +1597,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	testingclient "k8s.io/client-go/testing"
@@ -1676,6 +1677,9 @@ func TestCreateComputeUsesBoundedDNSNameAndSafeLabels(t *testing.T) {
 	if strings.Contains(name, "_") {
 		t.Fatalf("name contains unsafe character: %s", name)
 	}
+	if errs := validation.IsDNS1123Label(name); len(errs) > 0 {
+		t.Fatalf("name is not a DNS-1123 label: %v", errs)
+	}
 
 	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
@@ -1684,8 +1688,13 @@ func TestCreateComputeUsesBoundedDNSNameAndSafeLabels(t *testing.T) {
 	if deploy.Annotations["oplcloud.cn/compute-id"] != longID {
 		t.Fatalf("raw compute id annotation mismatch")
 	}
-	if len(deploy.Labels["oplcloud.cn/compute-key"]) > 63 {
-		t.Fatalf("compute key label too long")
+	for key, value := range deploy.Labels {
+		if value == longID {
+			t.Fatalf("raw compute id leaked into label %s", key)
+		}
+		if errs := validation.IsValidLabelValue(value); len(errs) > 0 {
+			t.Fatalf("label %s value %q is invalid: %v", key, value, errs)
+		}
 	}
 }
 
@@ -1708,6 +1717,31 @@ func TestCreateComputeCleansDeploymentWhenServiceCreateFails(t *testing.T) {
 	_, getErr := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
 	if getErr == nil {
 		t.Fatal("deployment should be cleaned up after service failure")
+	}
+}
+
+func TestCreateComputeReportsCleanupFailure(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	serviceErr := errors.New("service_create_failed")
+	deleteErr := errors.New("deployment_delete_failed")
+	client.PrependReactor("create", "services", func(action testingclient.Action) (bool, runtime.Object, error) {
+		return true, nil, serviceErr
+	})
+	client.PrependReactor("delete", "deployments", func(action testingclient.Action) (bool, runtime.Object, error) {
+		return true, nil, deleteErr
+	})
+	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+
+	_, err := provider.CreateCompute(context.Background(), CreateComputeInput{
+		ID:            "compute-1",
+		WorkspaceName: "Alpha",
+		PackageID:     "basic",
+	})
+	if !errors.Is(err, serviceErr) {
+		t.Fatalf("expected service error, got %v", err)
+	}
+	if !errors.Is(err, deleteErr) {
+		t.Fatalf("expected cleanup error, got %v", err)
 	}
 }
 
@@ -1737,6 +1771,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -1813,7 +1848,9 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 		},
 	}
 	if _, err := p.Client.CoreV1().Services(p.Namespace).Create(ctx, service, metav1.CreateOptions{}); err != nil {
-		_ = p.Client.AppsV1().Deployments(p.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		if deleteErr := p.Client.AppsV1().Deployments(p.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); deleteErr != nil {
+			return CreateComputeResult{}, errors.Join(err, fmt.Errorf("cleanup deployment %q: %w", name, deleteErr))
+		}
 		return CreateComputeResult{}, err
 	}
 
