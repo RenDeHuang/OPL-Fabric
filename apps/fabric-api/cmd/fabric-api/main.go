@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/catalog"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/config"
@@ -18,11 +19,19 @@ func main() {
 		StorageClass:    cfg.StorageClass,
 	})
 	svc := service.New(service.Config{Catalog: cat})
-	server := httpapi.NewServer(svc)
+	handler := httpapi.NewServer(svc, httpapi.Config{OperatorToken: cfg.OperatorToken})
 
 	addr := ":" + cfg.Port
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	log.Printf("fabric API listening on %s", addr)
-	if err := http.ListenAndServe(addr, server); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

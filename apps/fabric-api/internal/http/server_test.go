@@ -12,9 +12,10 @@ import (
 
 func TestReadinessEndpoint(t *testing.T) {
 	svc := service.New(service.Config{Catalog: testCatalog()})
-	server := NewServer(svc)
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fabric/readiness", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
 	rec := httptest.NewRecorder()
 
 	server.ServeHTTP(rec, req)
@@ -67,9 +68,10 @@ func TestReadinessEndpoint(t *testing.T) {
 func TestCatalogEndpoint(t *testing.T) {
 	cat := testCatalog()
 	svc := service.New(service.Config{Catalog: cat})
-	server := NewServer(svc)
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fabric/catalog", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
 	rec := httptest.NewRecorder()
 
 	server.ServeHTTP(rec, req)
@@ -100,6 +102,70 @@ func TestCatalogEndpoint(t *testing.T) {
 	}
 	if got.StorageClasses[0].StorageClassName != "cbs" {
 		t.Fatalf("storage class = %q, want cbs", got.StorageClasses[0].StorageClassName)
+	}
+}
+
+func TestServerRequiresOperatorToken(t *testing.T) {
+	svc := service.New(service.Config{Catalog: testCatalog()})
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	for _, tc := range []struct {
+		name          string
+		authorization string
+	}{
+		{name: "missing"},
+		{name: "wrong", authorization: "Bearer wrong-token"},
+		{name: "wrong scheme", authorization: "Basic test-token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/fabric/readiness", nil)
+			if tc.authorization != "" {
+				req.Header.Set("Authorization", tc.authorization)
+			}
+			rec := httptest.NewRecorder()
+
+			server.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+			}
+		})
+	}
+}
+
+func TestServerRejectsRequestsWhenOperatorTokenIsNotConfigured(t *testing.T) {
+	svc := service.New(service.Config{Catalog: testCatalog()})
+	server := NewServer(svc, Config{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/fabric/readiness", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestServerMethodAndPathHandling(t *testing.T) {
+	svc := service.New(service.Config{Catalog: testCatalog()})
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	methodReq := httptest.NewRequest(http.MethodPost, "/api/fabric/readiness", nil)
+	methodReq.Header.Set("Authorization", "Bearer test-token")
+	methodRec := httptest.NewRecorder()
+	server.ServeHTTP(methodRec, methodReq)
+	if methodRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("method status = %d, want %d", methodRec.Code, http.StatusMethodNotAllowed)
+	}
+
+	pathReq := httptest.NewRequest(http.MethodGet, "/api/fabric/missing", nil)
+	pathReq.Header.Set("Authorization", "Bearer test-token")
+	pathRec := httptest.NewRecorder()
+	server.ServeHTTP(pathRec, pathReq)
+	if pathRec.Code != http.StatusNotFound {
+		t.Fatalf("path status = %d, want %d", pathRec.Code, http.StatusNotFound)
 	}
 }
 

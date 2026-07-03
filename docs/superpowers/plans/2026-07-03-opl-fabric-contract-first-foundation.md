@@ -1927,6 +1927,7 @@ git commit -m "feat: add client-go provider boundary"
 - Create: `apps/fabric-api/internal/http/server.go`
 - Create: `apps/fabric-api/internal/http/server_test.go`
 - Create: `apps/fabric-api/cmd/fabric-api/main.go`
+- Update: `apps/fabric-api/internal/config/config.go`
 
 - [ ] **Step 1: Write failing HTTP tests**
 
@@ -1949,10 +1950,11 @@ func TestReadinessEndpoint(t *testing.T) {
 	svc := service.New(service.Config{
 		Catalog: catalog.DefaultCatalog(catalog.Config{WorkspaceImage: "image", WorkspaceDomain: "workspace.medopl.cn", StorageClass: "cbs"}),
 	})
-	server := NewServer(svc)
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/fabric/readiness", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
 	server.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -1971,10 +1973,11 @@ func TestCatalogEndpoint(t *testing.T) {
 	svc := service.New(service.Config{
 		Catalog: catalog.DefaultCatalog(catalog.Config{WorkspaceImage: "image", WorkspaceDomain: "workspace.medopl.cn", StorageClass: "cbs"}),
 	})
-	server := NewServer(svc)
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/fabric/catalog", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
 	server.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -1982,6 +1985,8 @@ func TestCatalogEndpoint(t *testing.T) {
 	}
 }
 ```
+
+Additional server tests cover the published Bearer operator token contract, unconfigured token rejection, unsupported method `405`, and unknown path `404`.
 
 - [ ] **Step 2: Run HTTP tests and confirm failure**
 
@@ -2047,27 +2052,55 @@ Create `apps/fabric-api/internal/http/server.go`:
 package httpapi
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/service"
 )
 
-func NewServer(svc *service.Service) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/fabric/readiness", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, svc.Readiness())
-	})
-	mux.HandleFunc("GET /api/fabric/catalog", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, svc.Catalog())
-	})
-	return mux
+type Config struct {
+	OperatorToken string
 }
 
-func writeJSON(w http.ResponseWriter, status int, value any) {
+func NewServer(svc *service.Service, cfg Config) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/fabric/readiness", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, svc.Readiness())
+	})
+	mux.HandleFunc("GET /api/fabric/catalog", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, svc.Catalog())
+	})
+	return requireOperatorToken(cfg.OperatorToken, mux)
+}
+
+func writeJSON(w http.ResponseWriter, value any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func requireOperatorToken(token string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !authorized(token, r.Header.Get("Authorization")) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="opl-fabric"`)
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func authorized(token, header string) bool {
+	if token == "" {
+		return false
+	}
+	got, ok := strings.CutPrefix(header, "Bearer ")
+	if !ok {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(token)) == 1
 }
 ```
 
@@ -2081,6 +2114,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/catalog"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/config"
@@ -2096,15 +2130,25 @@ func main() {
 		StorageClass: cfg.StorageClass,
 	})
 	svc := service.New(service.Config{Catalog: cat})
-	server := httpapi.NewServer(svc)
+	handler := httpapi.NewServer(svc, httpapi.Config{OperatorToken: cfg.OperatorToken})
 
 	addr := ":" + cfg.Port
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	log.Printf("opl fabric api listening on %s", addr)
-	if err := http.ListenAndServe(addr, server); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
+
+`config.Load` also reads `OPL_OPERATOR_TOKEN` into `Config.OperatorToken`.
 
 - [ ] **Step 6: Run API tests**
 

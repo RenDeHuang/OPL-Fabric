@@ -9,6 +9,7 @@ type Config struct {
 	WorkspaceDomain     string
 	StorageClass        string
 	KubernetesNamespace string
+	OperatorToken       string
 }
 
 func Load() Config {
@@ -19,6 +20,7 @@ func Load() Config {
 		WorkspaceDomain:     env("OPL_WORKSPACE_DOMAIN", "workspace.medopl.cn"),
 		StorageClass:        env("OPL_WORKSPACE_STORAGE_CLASS", "cbs"),
 		KubernetesNamespace: env("OPL_K8S_NAMESPACE", "opl-cloud"),
+		OperatorToken:       os.Getenv("OPL_OPERATOR_TOKEN"),
 	}
 }
 
