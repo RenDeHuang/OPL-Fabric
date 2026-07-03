@@ -1589,12 +1589,17 @@ package k8s
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	testingclient "k8s.io/client-go/testing"
 )
 
 func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
@@ -1602,35 +1607,113 @@ func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
 
 	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
-		ID: "compute-1",
+		ID:            "compute-1",
 		WorkspaceName: "Alpha",
-		PackageID: "basic",
-		CPU: 2,
-		MemoryGB: 4,
+		PackageID:     "basic",
+		CPU:           2,
+		MemoryGB:      4,
 	})
 	if err != nil {
 		t.Fatalf("create compute failed: %v", err)
 	}
-	if result.ProviderRef != "deployment/opl-compute-1" {
+	if !strings.HasPrefix(result.ProviderRef, "deployment/opl-compute-1-") {
 		t.Fatalf("provider ref = %s", result.ProviderRef)
 	}
+	if !strings.HasPrefix(result.ServiceRef, "service/opl-compute-1-") {
+		t.Fatalf("service ref = %s", result.ServiceRef)
+	}
+	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
 
-	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), "opl-compute-1", metav1.GetOptions{})
+	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("deployment missing: %v", err)
 	}
 	if deploy.Spec.Template.Spec.Containers[0].Image != "workspace-image:latest" {
 		t.Fatalf("image mismatch")
 	}
+	if deploy.Annotations["oplcloud.cn/compute-id"] != "compute-1" {
+		t.Fatalf("raw compute id annotation missing")
+	}
+	if deploy.Spec.Template.Spec.AutomountServiceAccountToken == nil || *deploy.Spec.Template.Spec.AutomountServiceAccountToken {
+		t.Fatalf("automount service account token should be false")
+	}
+	if deploy.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort != 3000 {
+		t.Fatalf("container port mismatch")
+	}
+	if deploy.Spec.Selector.MatchLabels["oplcloud.cn/compute-key"] == "" {
+		t.Fatalf("selector missing label-safe compute key")
+	}
 
-	_, err = client.CoreV1().Services("opl-cloud").Get(context.Background(), "opl-compute-1", metav1.GetOptions{})
+	service, err := client.CoreV1().Services("opl-cloud").Get(context.Background(), strings.TrimPrefix(result.ServiceRef, "service/"), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("service missing: %v", err)
+	}
+	if service.Spec.Selector["oplcloud.cn/compute-key"] != deploy.Spec.Template.Labels["oplcloud.cn/compute-key"] {
+		t.Fatalf("service selector does not match deployment label")
+	}
+	if service.Spec.Ports[0].Port != 3000 {
+		t.Fatalf("service port mismatch")
+	}
+}
+
+func TestCreateComputeUsesBoundedDNSNameAndSafeLabels(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+	longID := "Compute_" + strings.Repeat("ABC123_", 20)
+
+	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
+		ID:            longID,
+		WorkspaceName: "Alpha",
+		PackageID:     "basic",
+	})
+	if err != nil {
+		t.Fatalf("create compute failed: %v", err)
+	}
+	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
+	if len(name) > 63 {
+		t.Fatalf("name length = %d", len(name))
+	}
+	if strings.Contains(name, "_") {
+		t.Fatalf("name contains unsafe character: %s", name)
+	}
+
+	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("deployment missing: %v", err)
+	}
+	if deploy.Annotations["oplcloud.cn/compute-id"] != longID {
+		t.Fatalf("raw compute id annotation mismatch")
+	}
+	if len(deploy.Labels["oplcloud.cn/compute-key"]) > 63 {
+		t.Fatalf("compute key label too long")
+	}
+}
+
+func TestCreateComputeCleansDeploymentWhenServiceCreateFails(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	client.PrependReactor("create", "services", func(action testingclient.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("service_create_failed")
+	})
+	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+
+	_, err := provider.CreateCompute(context.Background(), CreateComputeInput{
+		ID:            "compute-1",
+		WorkspaceName: "Alpha",
+		PackageID:     "basic",
+	})
+	if err == nil {
+		t.Fatal("expected service create failure")
+	}
+	name := strings.TrimPrefix(k8sName("compute-1"), "deployment/")
+	_, getErr := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	if getErr == nil {
+		t.Fatal("deployment should be cleaned up after service failure")
 	}
 }
 
 var _ = appsv1.Deployment{}
 var _ = corev1.Service{}
+var _ kubernetes.Interface = fake.NewSimpleClientset()
 ```
 
 - [ ] **Step 2: Run provider test and confirm failure**
@@ -1652,6 +1735,8 @@ package k8s
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -1683,23 +1768,27 @@ type CreateComputeResult struct {
 
 func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (CreateComputeResult, error) {
 	name := k8sName(input.ID)
+	computeKey := labelValue(input.ID)
 	labels := map[string]string{
-		"app.kubernetes.io/name": "opl-workspace",
+		"app.kubernetes.io/name":     "opl-workspace",
 		"app.kubernetes.io/instance": name,
+		"oplcloud.cn/compute-key":    computeKey,
+	}
+	annotations := map[string]string{
 		"oplcloud.cn/compute-id": input.ID,
 	}
 
 	deploy := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: p.Namespace, Labels: labels},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: p.Namespace, Labels: labels, Annotations: annotations},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr[int32](1),
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{Labels: labels, Annotations: annotations},
 				Spec: corev1.PodSpec{
 					AutomountServiceAccountToken: ptr(false),
 					Containers: []corev1.Container{{
-						Name: "workspace",
+						Name:  "workspace",
 						Image: p.WorkspaceImage,
 						Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: 3000}},
 						Env: []corev1.EnvVar{
@@ -1720,10 +1809,11 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: p.Namespace, Labels: labels},
 		Spec: corev1.ServiceSpec{
 			Selector: labels,
-			Ports: []corev1.ServicePort{{Name: "http", Port: 3000, TargetPort: intstr.FromInt(3000)}},
+			Ports:    []corev1.ServicePort{{Name: "http", Port: 3000, TargetPort: intstr.FromInt(3000)}},
 		},
 	}
 	if _, err := p.Client.CoreV1().Services(p.Namespace).Create(ctx, service, metav1.CreateOptions{}); err != nil {
+		_ = p.Client.AppsV1().Deployments(p.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
 		return CreateComputeResult{}, err
 	}
 
@@ -1731,6 +1821,14 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 }
 
 func k8sName(id string) string {
+	return boundedName("opl", id, 63)
+}
+
+func labelValue(id string) string {
+	return boundedName("compute", id, 63)
+}
+
+func boundedName(prefix, id string, limit int) string {
 	clean := strings.Map(func(r rune) rune {
 		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
 			return r
@@ -1744,7 +1842,23 @@ func k8sName(id string) string {
 	if clean == "" {
 		clean = "resource"
 	}
-	return fmt.Sprintf("opl-%s", clean)
+	hash := shortHash(id)
+	maxClean := limit - len(prefix) - len(hash) - 2
+	if maxClean < 1 {
+		maxClean = 1
+	}
+	if len(clean) > maxClean {
+		clean = strings.Trim(clean[:maxClean], "-")
+	}
+	if clean == "" {
+		clean = "resource"
+	}
+	return fmt.Sprintf("%s-%s-%s", prefix, clean, hash)
+}
+
+func shortHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])[:8]
 }
 
 func ptr[T any](value T) *T {

@@ -2,12 +2,17 @@ package k8s
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	testingclient "k8s.io/client-go/testing"
 )
 
 func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
@@ -24,23 +29,101 @@ func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create compute failed: %v", err)
 	}
-	if result.ProviderRef != "deployment/opl-compute-1" {
+	if !strings.HasPrefix(result.ProviderRef, "deployment/opl-compute-1-") {
 		t.Fatalf("provider ref = %s", result.ProviderRef)
 	}
+	if !strings.HasPrefix(result.ServiceRef, "service/opl-compute-1-") {
+		t.Fatalf("service ref = %s", result.ServiceRef)
+	}
+	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
 
-	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), "opl-compute-1", metav1.GetOptions{})
+	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("deployment missing: %v", err)
 	}
 	if deploy.Spec.Template.Spec.Containers[0].Image != "workspace-image:latest" {
 		t.Fatalf("image mismatch")
 	}
+	if deploy.Annotations["oplcloud.cn/compute-id"] != "compute-1" {
+		t.Fatalf("raw compute id annotation missing")
+	}
+	if deploy.Spec.Template.Spec.AutomountServiceAccountToken == nil || *deploy.Spec.Template.Spec.AutomountServiceAccountToken {
+		t.Fatalf("automount service account token should be false")
+	}
+	if deploy.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort != 3000 {
+		t.Fatalf("container port mismatch")
+	}
+	if deploy.Spec.Selector.MatchLabels["oplcloud.cn/compute-key"] == "" {
+		t.Fatalf("selector missing label-safe compute key")
+	}
 
-	_, err = client.CoreV1().Services("opl-cloud").Get(context.Background(), "opl-compute-1", metav1.GetOptions{})
+	service, err := client.CoreV1().Services("opl-cloud").Get(context.Background(), strings.TrimPrefix(result.ServiceRef, "service/"), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("service missing: %v", err)
+	}
+	if service.Spec.Selector["oplcloud.cn/compute-key"] != deploy.Spec.Template.Labels["oplcloud.cn/compute-key"] {
+		t.Fatalf("service selector does not match deployment label")
+	}
+	if service.Spec.Ports[0].Port != 3000 {
+		t.Fatalf("service port mismatch")
+	}
+}
+
+func TestCreateComputeUsesBoundedDNSNameAndSafeLabels(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+	longID := "Compute_" + strings.Repeat("ABC123_", 20)
+
+	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
+		ID:            longID,
+		WorkspaceName: "Alpha",
+		PackageID:     "basic",
+	})
+	if err != nil {
+		t.Fatalf("create compute failed: %v", err)
+	}
+	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
+	if len(name) > 63 {
+		t.Fatalf("name length = %d", len(name))
+	}
+	if strings.Contains(name, "_") {
+		t.Fatalf("name contains unsafe character: %s", name)
+	}
+
+	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("deployment missing: %v", err)
+	}
+	if deploy.Annotations["oplcloud.cn/compute-id"] != longID {
+		t.Fatalf("raw compute id annotation mismatch")
+	}
+	if len(deploy.Labels["oplcloud.cn/compute-key"]) > 63 {
+		t.Fatalf("compute key label too long")
+	}
+}
+
+func TestCreateComputeCleansDeploymentWhenServiceCreateFails(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	client.PrependReactor("create", "services", func(action testingclient.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("service_create_failed")
+	})
+	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+
+	_, err := provider.CreateCompute(context.Background(), CreateComputeInput{
+		ID:            "compute-1",
+		WorkspaceName: "Alpha",
+		PackageID:     "basic",
+	})
+	if err == nil {
+		t.Fatal("expected service create failure")
+	}
+	name := strings.TrimPrefix(k8sName("compute-1"), "deployment/")
+	_, getErr := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	if getErr == nil {
+		t.Fatal("deployment should be cleaned up after service failure")
 	}
 }
 
 var _ = appsv1.Deployment{}
 var _ = corev1.Service{}
+var _ kubernetes.Interface = fake.NewSimpleClientset()
