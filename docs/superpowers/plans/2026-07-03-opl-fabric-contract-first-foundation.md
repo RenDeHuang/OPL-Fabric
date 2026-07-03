@@ -2297,7 +2297,13 @@ export interface WorkspacePackage {
 }
 
 export async function fetchReadiness(): Promise<Readiness> {
-  const response = await fetch("/api/fabric/readiness");
+  const token = import.meta.env.VITE_OPL_OPERATOR_TOKEN;
+  if (!token) {
+    throw new Error("operator_token_missing");
+  }
+  const response = await fetch("/api/fabric/readiness", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
   if (!response.ok) {
     throw new Error(`readiness_failed:${response.status}`);
   }
