@@ -27,12 +27,12 @@ func TestReadinessEndpoint(t *testing.T) {
 	}
 
 	var readiness struct {
-		Ready           bool     `json:"ready"`
-		Provider        string   `json:"provider"`
-		MissingEnv      []string `json:"missingEnv"`
-		ResourceCatalog string   `json:"resourceCatalog"`
-		Blockers        []string `json:"blockers"`
-		RepairHints     []string `json:"repairHints"`
+		Ready           bool            `json:"ready"`
+		Provider        string          `json:"provider"`
+		MissingEnv      []string        `json:"missingEnv"`
+		ResourceCatalog catalog.Catalog `json:"resourceCatalog"`
+		Blockers        []string        `json:"blockers"`
+		RepairHints     []string        `json:"repairHints"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&readiness); err != nil {
 		t.Fatalf("decode readiness: %v", err)
@@ -44,8 +44,14 @@ func TestReadinessEndpoint(t *testing.T) {
 	if readiness.Provider != "tencent-tke" {
 		t.Fatalf("provider = %q, want tencent-tke", readiness.Provider)
 	}
-	if readiness.ResourceCatalog != "available" {
-		t.Fatalf("resourceCatalog = %q, want available", readiness.ResourceCatalog)
+	if readiness.ResourceCatalog.SchemaVersion != 1 {
+		t.Fatalf("resourceCatalog schemaVersion = %d, want 1", readiness.ResourceCatalog.SchemaVersion)
+	}
+	if len(readiness.ResourceCatalog.WorkspacePackages) != 3 {
+		t.Fatalf("resourceCatalog workspace package count = %d, want 3", len(readiness.ResourceCatalog.WorkspacePackages))
+	}
+	if readiness.ResourceCatalog.WorkspacePackages[0].ID != "basic" {
+		t.Fatalf("resourceCatalog first workspace package ID = %q, want basic", readiness.ResourceCatalog.WorkspacePackages[0].ID)
 	}
 	if len(readiness.MissingEnv) != 0 {
 		t.Fatalf("missingEnv = %v, want empty", readiness.MissingEnv)

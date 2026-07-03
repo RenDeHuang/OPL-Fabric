@@ -11,12 +11,12 @@ type Service struct {
 }
 
 type Readiness struct {
-	Ready           bool     `json:"ready"`
-	Provider        string   `json:"provider"`
-	MissingEnv      []string `json:"missingEnv"`
-	ResourceCatalog string   `json:"resourceCatalog"`
-	Blockers        []string `json:"blockers"`
-	RepairHints     []string `json:"repairHints"`
+	Ready           bool            `json:"ready"`
+	Provider        string          `json:"provider"`
+	MissingEnv      []string        `json:"missingEnv"`
+	ResourceCatalog catalog.Catalog `json:"resourceCatalog"`
+	Blockers        []string        `json:"blockers"`
+	RepairHints     []string        `json:"repairHints"`
 }
 
 func New(cfg Config) *Service {
@@ -32,7 +32,7 @@ func (s *Service) Readiness() Readiness {
 		Ready:           true,
 		Provider:        "tencent-tke",
 		MissingEnv:      []string{},
-		ResourceCatalog: "available",
+		ResourceCatalog: s.catalog,
 		Blockers:        []string{},
 		RepairHints:     []string{},
 	}
