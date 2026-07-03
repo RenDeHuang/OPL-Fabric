@@ -20,3 +20,50 @@ The root verification command skips workspaces that have not been created yet an
 ```bash
 npm test
 ```
+
+Focused backend verification:
+
+```bash
+npm run test:go
+```
+
+Focused operator console verification:
+
+```bash
+npm run test:console
+```
+
+## Local Development
+
+The Fabric API listens on port `8787` by default and requires `Authorization: Bearer $OPL_OPERATOR_TOKEN` for all HTTP routes.
+
+```bash
+cd apps/fabric-api
+OPL_OPERATOR_TOKEN=dev-operator-token go run ./cmd/fabric-api
+```
+
+In a second shell, run the operator console. The Vite dev server proxies `/api` to `http://127.0.0.1:8787` and injects the Bearer token from its server-side `OPL_OPERATOR_TOKEN` environment variable, so the token is not exposed through a browser `VITE_` variable.
+
+```bash
+OPL_OPERATOR_TOKEN=dev-operator-token npm --prefix apps/fabric-console run dev
+```
+
+## Deployment Skeleton
+
+`deploy/k8s/opl-fabric-api.yaml` contains a namespace-scoped skeleton for the Fabric API:
+
+- `Deployment` and `Service` on port `8787`.
+- `ServiceAccount`, `Role`, and `RoleBinding` for client-go access to namespaced `apps/deployments` and core `services` only.
+- Default image `opl-fabric-api:local`; replace it with a registry image in your deployment pipeline or overlay.
+- `OPL_K8S_NAMESPACE` populated from the pod metadata namespace.
+- Workspace defaults matching backend config: `OPL_WORKSPACE_IMAGE`, `OPL_WORKSPACE_DOMAIN`, and `OPL_WORKSPACE_STORAGE_CLASS`.
+
+The manifest expects this placeholder Secret in the same namespace:
+
+```bash
+kubectl create secret generic opl-fabric-api-secrets \
+  --from-literal=DATABASE_URL='postgres://user:password@postgres:5432/opl_fabric?sslmode=disable' \
+  --from-literal=OPL_OPERATOR_TOKEN='replace-with-operator-token'
+```
+
+`DATABASE_URL` is consumed by the PostgreSQL store. `OPL_OPERATOR_TOKEN` is required by the HTTP server for Bearer authentication.

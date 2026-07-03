@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
+subjects:
+  - kind: ServiceAccount
+    name: opl-fabric-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: opl-fabric-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opl-fabric-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opl-fabric-api
+    spec:
+      serviceAccountName: opl-fabric-api
+      containers:
+        - name: api
+          image: opl-fabric-api:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8787
+          env:
+            - name: PORT
+              value: "8787"
+            - name: OPL_K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OPL_WORKSPACE_IMAGE
+              value: ghcr.io/gaofeng21cn/one-person-lab-app:latest
+            - name: OPL_WORKSPACE_DOMAIN
+              value: workspace.medopl.cn
+            - name: OPL_WORKSPACE_STORAGE_CLASS
+              value: cbs
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opl-fabric-api-secrets
+                  key: DATABASE_URL
+            - name: OPL_OPERATOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: opl-fabric-api-secrets
+                  key: OPL_OPERATOR_TOKEN
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
+spec:
+  selector:
+    app.kubernetes.io/name: opl-fabric-api
+  ports:
+    - name: http
+      port: 8787
+      targetPort: 8787

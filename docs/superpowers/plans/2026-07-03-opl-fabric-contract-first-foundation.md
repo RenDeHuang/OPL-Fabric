@@ -2548,12 +2548,48 @@ git commit -m "feat: add fabric operator console"
 - Create: `deploy/k8s/opl-fabric-api.yaml`
 - Create: `deploy/migrations/README.md`
 - Modify: `README.md`
+- Modify: `docs/superpowers/plans/2026-07-03-opl-fabric-contract-first-foundation.md` if needed to sync auth/RBAC decisions
 
 - [ ] **Step 1: Add deployment manifest**
 
 Create `deploy/k8s/opl-fabric-api.yaml`:
 
 ```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
+subjects:
+  - kind: ServiceAccount
+    name: opl-fabric-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: opl-fabric-api
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -2585,11 +2621,29 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: OPL_WORKSPACE_IMAGE
+              value: ghcr.io/gaofeng21cn/one-person-lab-app:latest
+            - name: OPL_WORKSPACE_DOMAIN
+              value: workspace.medopl.cn
+            - name: OPL_WORKSPACE_STORAGE_CLASS
+              value: cbs
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opl-fabric-api-secrets
+                  key: DATABASE_URL
+            - name: OPL_OPERATOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: opl-fabric-api-secrets
+                  key: OPL_OPERATOR_TOKEN
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: opl-fabric-api
+  labels:
+    app.kubernetes.io/name: opl-fabric-api
 spec:
   selector:
     app.kubernetes.io/name: opl-fabric-api
@@ -2604,9 +2658,11 @@ Create `deploy/migrations/README.md`:
 ```markdown
 # Migrations
 
-The first schema is embedded in `apps/fabric-api/internal/postgres/schema.sql`.
+The first Fabric schema is embedded in `apps/fabric-api/internal/postgres/schema.sql`.
 
 Production rollout must run `Store.Migrate` before serving mutating Fabric API traffic.
+
+The deployment manifest expects `DATABASE_URL` in the `opl-fabric-api-secrets` Secret under the `DATABASE_URL` key.
 ```
 
 - [ ] **Step 2: Update README verification section**
@@ -2628,6 +2684,8 @@ Run operator console checks:
 npm --prefix apps/fabric-console run typecheck
 npm --prefix apps/fabric-console run build
 ```
+
+Document that local API and console development both use `OPL_OPERATOR_TOKEN`, with the console dev proxy injecting it server-side. Document the deployment Secret placeholders `DATABASE_URL` and `OPL_OPERATOR_TOKEN`.
 ````
 
 - [ ] **Step 3: Run full verification**
@@ -2644,7 +2702,7 @@ Expected: both commands exit `0`.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add README.md deploy
+git add README.md deploy docs/superpowers/plans/2026-07-03-opl-fabric-contract-first-foundation.md
 git commit -m "chore: add fabric deployment skeleton"
 ```
 
