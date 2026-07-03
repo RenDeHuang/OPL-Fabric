@@ -1103,6 +1103,12 @@ func TestDigestManifestIsStable(t *testing.T) {
 	if len(first) != 64 {
 		t.Fatalf("digest length = %d", len(first))
 	}
+	if got, want := Digest(nil), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"; got != want {
+		t.Fatalf("empty digest = %s, want %s", got, want)
+	}
+	if got, want := Digest([]byte("manifest")), "05b3abf2579a5eb66403cd78be557fd860633a1fe2103c7642030defe32c657f"; got != want {
+		t.Fatalf("manifest digest = %s, want %s", got, want)
+	}
 }
 
 func TestLifecycleLedgerEntry(t *testing.T) {
@@ -1115,6 +1121,53 @@ func TestLifecycleLedgerEntry(t *testing.T) {
 	}
 	if err := entry.Validate(); err != nil {
 		t.Fatalf("entry should validate: %v", err)
+	}
+}
+
+func TestLifecycleLedgerEntryValidationErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry LedgerEntry
+		want  error
+	}{
+		{
+			name:  "missing_operation_id",
+			entry: LedgerEntry{Phase: "apply", Status: "succeeded", Summary: "summary", Actions: []LedgerAction{validAction()}},
+			want:  ErrLedgerOperationIDRequired,
+		},
+		{
+			name:  "missing_action",
+			entry: LedgerEntry{OperationID: "op-1", Phase: "apply", Status: "succeeded", Summary: "summary"},
+			want:  ErrLedgerActionRequired,
+		},
+		{
+			name:  "missing_action_target",
+			entry: LedgerEntry{OperationID: "op-1", Phase: "apply", Status: "succeeded", Summary: "summary", Actions: []LedgerAction{{ActionID: "act-1", ActionKind: "apply", Result: "created", SHA256: Digest([]byte("manifest"))}}},
+			want:  ErrLedgerActionTargetRequired,
+		},
+		{
+			name:  "invalid_sha",
+			entry: LedgerEntry{OperationID: "op-1", Phase: "apply", Status: "succeeded", Summary: "summary", Actions: []LedgerAction{{ActionID: "act-1", ActionKind: "apply", TargetRef: "deployment/opl-ws", Result: "created", SHA256: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"}}},
+			want:  ErrLedgerActionSHAInvalid,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.entry.Validate(); err != tt.want {
+				t.Fatalf("error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func validAction() LedgerAction {
+	return LedgerAction{
+		ActionID:   "act-1",
+		ActionKind: "apply",
+		TargetRef:  "deployment/opl-ws",
+		Result:     "created",
+		SHA256:     Digest([]byte("manifest")),
 	}
 }
 ```
@@ -1142,6 +1195,19 @@ import (
 	"errors"
 )
 
+var (
+	ErrLedgerOperationIDRequired   = errors.New("ledger_operation_id_required")
+	ErrLedgerPhaseRequired         = errors.New("ledger_phase_required")
+	ErrLedgerStatusRequired        = errors.New("ledger_status_required")
+	ErrLedgerSummaryRequired       = errors.New("ledger_summary_required")
+	ErrLedgerActionRequired        = errors.New("ledger_entry_requires_action")
+	ErrLedgerActionIDRequired      = errors.New("ledger_action_id_required")
+	ErrLedgerActionKindRequired    = errors.New("ledger_action_kind_required")
+	ErrLedgerActionTargetRequired  = errors.New("ledger_action_target_required")
+	ErrLedgerActionResultRequired  = errors.New("ledger_action_result_required")
+	ErrLedgerActionSHAInvalid      = errors.New("ledger_action_sha_invalid")
+)
+
 type LedgerEntry struct {
 	OperationID string         `json:"operationId"`
 	Phase       string         `json:"phase"`
@@ -1164,18 +1230,47 @@ func Digest(input []byte) string {
 }
 
 func (entry LedgerEntry) Validate() error {
-	if entry.OperationID == "" || entry.Phase == "" || entry.Status == "" || entry.Summary == "" {
-		return errors.New("ledger_entry_missing_required_field")
+	if entry.OperationID == "" {
+		return ErrLedgerOperationIDRequired
+	}
+	if entry.Phase == "" {
+		return ErrLedgerPhaseRequired
+	}
+	if entry.Status == "" {
+		return ErrLedgerStatusRequired
+	}
+	if entry.Summary == "" {
+		return ErrLedgerSummaryRequired
 	}
 	if len(entry.Actions) == 0 {
-		return errors.New("ledger_entry_requires_action")
+		return ErrLedgerActionRequired
 	}
 	for _, action := range entry.Actions {
-		if action.ActionID == "" || action.ActionKind == "" || action.TargetRef == "" || action.Result == "" || len(action.SHA256) != 64 {
-			return errors.New("ledger_action_invalid")
+		if action.ActionID == "" {
+			return ErrLedgerActionIDRequired
+		}
+		if action.ActionKind == "" {
+			return ErrLedgerActionKindRequired
+		}
+		if action.TargetRef == "" {
+			return ErrLedgerActionTargetRequired
+		}
+		if action.Result == "" {
+			return ErrLedgerActionResultRequired
+		}
+		if !isSHA256Hex(action.SHA256) {
+			return ErrLedgerActionSHAInvalid
 		}
 	}
 	return nil
+}
+
+func isSHA256Hex(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 ```
 
@@ -1185,21 +1280,21 @@ Append to `apps/fabric-api/internal/domain/types.go`:
 
 ```go
 type FabricOperation struct {
-	ID             string
-	CorrelationID  string
-	IdempotencyKey string
-	RequestedBy    string
-	ResourceID     string
-	ResourceKind   string
-	State          OperationState
+	ID             string         `json:"id"`
+	CorrelationID  string         `json:"correlationId"`
+	IdempotencyKey string         `json:"idempotencyKey"`
+	RequestedBy    string         `json:"requestedBy"`
+	ResourceID     string         `json:"resourceId"`
+	ResourceKind   string         `json:"resourceKind"`
+	State          OperationState `json:"state"`
 }
 
 type EvidenceRef struct {
-	ID          string
-	OperationID string
-	Kind        string
-	Ref         string
-	SHA256      string
+	ID          string `json:"id"`
+	OperationID string `json:"operationId"`
+	Kind        string `json:"kind"`
+	Ref         string `json:"ref"`
+	SHA256      string `json:"sha256"`
 }
 ```
 

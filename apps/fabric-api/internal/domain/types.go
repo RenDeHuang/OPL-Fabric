@@ -69,19 +69,19 @@ type DestroyResult struct {
 }
 
 type FabricOperation struct {
-	ID             string
-	CorrelationID  string
-	IdempotencyKey string
-	RequestedBy    string
-	ResourceID     string
-	ResourceKind   string
-	State          OperationState
+	ID             string         `json:"id"`
+	CorrelationID  string         `json:"correlationId"`
+	IdempotencyKey string         `json:"idempotencyKey"`
+	RequestedBy    string         `json:"requestedBy"`
+	ResourceID     string         `json:"resourceId"`
+	ResourceKind   string         `json:"resourceKind"`
+	State          OperationState `json:"state"`
 }
 
 type EvidenceRef struct {
-	ID          string
-	OperationID string
-	Kind        string
-	Ref         string
-	SHA256      string
+	ID          string `json:"id"`
+	OperationID string `json:"operationId"`
+	Kind        string `json:"kind"`
+	Ref         string `json:"ref"`
+	SHA256      string `json:"sha256"`
 }
