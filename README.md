@@ -53,7 +53,7 @@ OPL_OPERATOR_TOKEN=dev-operator-token npm --prefix apps/fabric-console run dev
 `deploy/k8s/opl-fabric-api.yaml` contains a namespace-scoped skeleton for the Fabric API:
 
 - `Deployment` and `Service` on port `8787`.
-- `ServiceAccount`, `Role`, and `RoleBinding` for client-go access to namespaced `apps/deployments` and core `services` only.
+- `ServiceAccount`, `Role`, and `RoleBinding` with current minimal client-go permissions: create/delete Deployments and create Services in the namespace.
 - Default image `opl-fabric-api:local`; replace it with a registry image in your deployment pipeline or overlay.
 - `OPL_K8S_NAMESPACE` populated from the pod metadata namespace.
 - Workspace defaults matching backend config: `OPL_WORKSPACE_IMAGE`, `OPL_WORKSPACE_DOMAIN`, and `OPL_WORKSPACE_STORAGE_CLASS`.
@@ -67,3 +67,5 @@ kubectl create secret generic opl-fabric-api-secrets \
 ```
 
 `DATABASE_URL` is consumed by the PostgreSQL store. `OPL_OPERATOR_TOKEN` is required by the HTTP server for Bearer authentication.
+
+Future reconcile/status flows that read, watch, patch, or update Kubernetes objects must expand the Role deliberately with matching tests and review.
