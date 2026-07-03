@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opl.fabric/contracts/fabric-lifecycle-ledger.schema.json",
+  "title": "OPL Fabric Lifecycle Ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "operationId", "phase", "status", "summary", "actions"],
+  "properties": {
+    "version": { "const": "fabric-lifecycle-ledger.v1" },
+    "operationId": { "type": "string", "minLength": 1 },
+    "phase": { "enum": ["dry_run", "apply", "verify"] },
+    "status": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["actionId", "actionKind", "targetRef", "result", "sha256"],
+        "properties": {
+          "actionId": { "type": "string", "minLength": 1 },
+          "actionKind": { "type": "string", "minLength": 1 },
+          "targetRef": { "type": "string", "minLength": 1 },
+          "result": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" }
+        }
+      }
+    }
+  }
+}

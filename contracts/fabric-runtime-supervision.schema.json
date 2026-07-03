@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opl.fabric/contracts/fabric-runtime-supervision.schema.json",
+  "title": "OPL Fabric Runtime Supervision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "provider", "ready", "observedAt", "blockers", "repairHints"],
+  "properties": {
+    "version": { "const": "fabric-runtime-supervision.v1" },
+    "provider": { "type": "string", "minLength": 1 },
+    "ready": { "type": "boolean" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "blockers": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "repairHints": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

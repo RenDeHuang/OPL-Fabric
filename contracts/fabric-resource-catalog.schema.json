@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opl.fabric/contracts/fabric-resource-catalog.schema.json",
+  "title": "OPL Fabric Resource Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "owner", "workspacePackages", "computeProfiles", "storageClasses", "workspaceImages", "ingressDomains"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "owner": { "const": "OPL Fabric" },
+    "workspacePackages": { "type": "array", "items": { "$ref": "#/$defs/workspacePackage" } },
+    "computeProfiles": { "type": "array", "items": { "$ref": "#/$defs/computeProfile" } },
+    "storageClasses": { "type": "array", "items": { "$ref": "#/$defs/storageClass" } },
+    "workspaceImages": { "type": "array", "items": { "$ref": "#/$defs/workspaceImage" } },
+    "ingressDomains": { "type": "array", "items": { "$ref": "#/$defs/ingressDomain" } }
+  },
+  "$defs": {
+    "workspacePackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "accelerator", "cpu", "memoryGb", "gpu", "server", "diskGb", "available", "computeProfileId", "storageClassId", "workspaceImageId", "ingressDomainId"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "accelerator": { "enum": ["cpu", "gpu"] },
+        "cpu": { "type": "integer", "minimum": 1 },
+        "memoryGb": { "type": "integer", "minimum": 1 },
+        "gpu": { "type": "integer", "minimum": 0 },
+        "server": { "type": "string", "minLength": 1 },
+        "diskGb": { "type": "integer", "minimum": 1 },
+        "available": { "type": "boolean" },
+        "unavailableReason": { "type": "string", "minLength": 1 },
+        "computeProfileId": { "type": "string", "minLength": 1 },
+        "storageClassId": { "type": "string", "minLength": 1 },
+        "workspaceImageId": { "type": "string", "minLength": 1 },
+        "ingressDomainId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "computeProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "accelerator", "cpu", "memoryGb", "gpu", "available", "provider"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "accelerator": { "enum": ["cpu", "gpu"] },
+        "cpu": { "type": "integer", "minimum": 1 },
+        "memoryGb": { "type": "integer", "minimum": 1 },
+        "gpu": { "type": "integer", "minimum": 0 },
+        "available": { "type": "boolean" },
+        "provider": { "type": "string", "minLength": 1 },
+        "unavailableReason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "storageClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "provider", "storageClassName", "accessMode", "available"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "storageClassName": { "type": "string", "minLength": 1 },
+        "accessMode": { "type": "string", "minLength": 1 },
+        "available": { "type": "boolean" }
+      }
+    },
+    "workspaceImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "image", "port", "persistentMounts", "available"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "image": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1 },
+        "persistentMounts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "available": { "type": "boolean" }
+      }
+    },
+    "ingressDomain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "host", "pathPattern", "available"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "host": { "type": "string", "minLength": 1 },
+        "pathPattern": { "const": "/w/<workspaceId>" },
+        "available": { "type": "boolean" }
+      }
+    }
+  }
+}

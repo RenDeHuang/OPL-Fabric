@@ -1,0 +1,16 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OPL Fabric API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/fabric/readiness": { "get": { "responses": { "200": { "description": "Fabric readiness" } } } },
+    "/api/fabric/catalog": { "get": { "responses": { "200": { "description": "Fabric resource catalog" } } } },
+    "/api/fabric/compute": { "post": { "responses": { "202": { "description": "Compute operation accepted" } } } },
+    "/api/fabric/storage": { "post": { "responses": { "202": { "description": "Storage operation accepted" } } } },
+    "/api/fabric/attachments": { "post": { "responses": { "202": { "description": "Attachment operation accepted" } } } },
+    "/api/fabric/workspace-routes": { "post": { "responses": { "202": { "description": "Route operation accepted" } } } },
+    "/api/fabric/operations/{operationId}": { "get": { "responses": { "200": { "description": "Operation status" } } } }
+  }
+}
