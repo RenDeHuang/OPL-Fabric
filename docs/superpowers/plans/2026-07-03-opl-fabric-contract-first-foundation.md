@@ -17,7 +17,7 @@ Create these files and directories:
 ```text
 .gitignore
 README.md
-go.work
+go.mod
 package.json
 
 contracts/fabric-api.openapi.json
@@ -70,7 +70,7 @@ deploy/migrations/README.md
 - Create: `.gitignore`
 - Create: `README.md`
 - Create: `package.json`
-- Create: `go.work`
+- Create: `go.mod`
 - Create: `docs/architecture.md`
 - Create: `docs/decisions.md`
 - Create: `docs/invariants.md`
@@ -112,12 +112,12 @@ Write root `package.json`:
 }
 ```
 
-Write `go.work`:
+Write root `go.mod`:
 
 ```go
-go 1.22.2
+module github.com/RenDeHuang/OPL-Fabric
 
-use ./apps/fabric-api
+go 1.22.2
 ```
 
 - [ ] **Step 2: Create public repository docs**
@@ -228,7 +228,7 @@ Expected: command exits `0`.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add .gitignore README.md package.json go.work docs/architecture.md docs/decisions.md docs/invariants.md docs/status.md
+git add .gitignore README.md package.json go.mod docs/architecture.md docs/decisions.md docs/invariants.md docs/status.md
 git commit -m "chore: initialize opl fabric repository"
 ```
 
@@ -557,6 +557,14 @@ require (
 	k8s.io/apimachinery v0.29.3
 	k8s.io/client-go v0.29.3
 )
+```
+
+Replace `go.work` with:
+
+```go
+go 1.22.2
+
+use ./apps/fabric-api
 ```
 
 - [ ] **Step 2: Write failing domain safety tests**
