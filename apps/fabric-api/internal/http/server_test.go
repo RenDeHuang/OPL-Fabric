@@ -109,6 +109,8 @@ func TestCatalogEndpoint(t *testing.T) {
 		DatabaseURL:         "postgres://user:pass@db:5432/opl_fabric",
 		OperatorToken:       "test-token",
 		KubernetesNamespace: "opl-cloud",
+		IngressClass:        "qcloud",
+		ImagePullSecretName: "tcr-pull-secret",
 	})
 	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
@@ -225,5 +227,7 @@ func testServiceConfig() service.Config {
 		DatabaseURL:         "postgres://user:pass@db:5432/opl_fabric",
 		OperatorToken:       "test-token",
 		KubernetesNamespace: "opl-cloud",
+		IngressClass:        "qcloud",
+		ImagePullSecretName: "tcr-pull-secret",
 	}
 }

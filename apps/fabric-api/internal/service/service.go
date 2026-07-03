@@ -7,6 +7,8 @@ type Config struct {
 	DatabaseURL         string
 	OperatorToken       string
 	KubernetesNamespace string
+	IngressClass        string
+	ImagePullSecretName string
 }
 
 type Service struct {
@@ -14,6 +16,8 @@ type Service struct {
 	databaseURL         string
 	operatorToken       string
 	kubernetesNamespace string
+	ingressClass        string
+	imagePullSecretName string
 }
 
 type Readiness struct {
@@ -31,6 +35,8 @@ func New(cfg Config) *Service {
 		databaseURL:         cfg.DatabaseURL,
 		operatorToken:       cfg.OperatorToken,
 		kubernetesNamespace: cfg.KubernetesNamespace,
+		ingressClass:        cfg.IngressClass,
+		imagePullSecretName: cfg.ImagePullSecretName,
 	}
 }
 
@@ -60,6 +66,12 @@ func (s *Service) missingEnv() []string {
 	}
 	if s.kubernetesNamespace == "" {
 		missing = append(missing, "OPL_K8S_NAMESPACE")
+	}
+	if s.ingressClass == "" {
+		missing = append(missing, "OPL_INGRESS_CLASS")
+	}
+	if s.imagePullSecretName == "" {
+		missing = append(missing, "OPL_IMAGE_PULL_SECRET_NAME")
 	}
 	return missing
 }

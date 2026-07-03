@@ -23,6 +23,8 @@ func main() {
 		DatabaseURL:         cfg.DatabaseURL,
 		OperatorToken:       cfg.OperatorToken,
 		KubernetesNamespace: cfg.KubernetesNamespace,
+		IngressClass:        cfg.IngressClass,
+		ImagePullSecretName: cfg.ImagePullSecretName,
 	})
 	handler := httpapi.NewServer(svc, httpapi.Config{OperatorToken: cfg.OperatorToken})
 
