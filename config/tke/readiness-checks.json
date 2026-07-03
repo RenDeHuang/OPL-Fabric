@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "provider": "tencent-tke",
+  "requiredEnv": [
+    "DATABASE_URL",
+    "OPL_OPERATOR_TOKEN",
+    "OPL_WORKSPACE_IMAGE",
+    "OPL_WORKSPACE_DOMAIN",
+    "OPL_K8S_NAMESPACE",
+    "OPL_INGRESS_CLASS",
+    "OPL_IMAGE_PULL_SECRET_NAME",
+    "OPL_WORKSPACE_STORAGE_CLASS",
+    "TENCENT_DEPLOY_KUBECONFIG_REF",
+    "TENCENT_DEPLOY_CLUSTER_ID",
+    "TENCENT_TCR_REGISTRY",
+    "TENCENT_TCR_NAMESPACE",
+    "TENCENT_TCR_REGION"
+  ],
+  "optionalEnv": [
+    "OPL_WORKSPACE_VOLUME_SNAPSHOT_CLASS",
+    "OPL_WORKSPACE_NODE_SELECTOR_KEY",
+    "OPL_WORKSPACE_NODE_SELECTOR_VALUE",
+    "OPL_TLS_CERT_ID",
+    "OPL_WORKSPACE_TLS_SECRET_NAME",
+    "OPL_WORKSPACE_TLS_CERT_ID",
+    "OPL_CODEX_MODEL",
+    "OPL_CODEX_REASONING_EFFORT",
+    "OPL_CODEX_BASE_URL",
+    "OPL_CODEX_API_KEY",
+    "OPL_CODEX_MODEL_PROVIDER",
+    "OPL_CODEX_PROVIDER_NAME",
+    "CODEX_HOME"
+  ],
+  "clusterChecks": [
+    "postgres_connection",
+    "postgres_migration_version",
+    "kubernetes_api_access",
+    "namespace_exists",
+    "storage_class_exists",
+    "image_pull_secret_exists",
+    "ingress_class_exists",
+    "shared_ingress_exists_or_creatable",
+    "volume_snapshot_crd_exists",
+    "volume_snapshot_class_exists_when_configured"
+  ],
+  "workspaceContract": {
+    "webuiPort": 3000,
+    "dataDir": "/data",
+    "projectsDir": "/projects",
+    "codexHome": "/data/codex"
+  }
+}
