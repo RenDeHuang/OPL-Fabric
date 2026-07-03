@@ -16,7 +16,9 @@ The service does not own OPL Console commercial flows, wallet and billing truth,
 
 This design is based on:
 
-- `RenDeHuang/OPL-Cloud` current contracts and implementation shape.
+- `RenDeHuang/OPL-Cloud@2985bfdaa592a0644da5fdb0c11a877785a85155` contracts and implementation shape from branch `main`.
+- OPL Cloud commit date `2026-07-03T14:33:40Z`.
+- OPL Cloud commit message `fix: tolerate workspace websocket resets`.
 - `OPL-Cloud/packages/contracts/opl-cloud-product-contract.json`.
 - `OPL-Cloud/packages/contracts/opl-cloud-fabric-resource-catalog-contract.json`.
 - `OPL-Cloud/packages/contracts/opl-cloud-workspace-lifecycle-contract.json`.
@@ -26,6 +28,8 @@ This design is based on:
 - `gaofeng21cn/one-person-lab` as the development framework reference for contract-light truth, lifecycle ledger, evidence, human gates, readiness, blocker reporting, and ownership boundaries.
 
 `OPL-Fabric` starts as an empty repository. This design treats `OPL-Cloud` as the source of current product contracts and old implementation behavior, not as a codebase to copy directly.
+
+Future `OPL-Cloud` updates require an explicit re-baseline and contract diff before changing `OPL-Fabric` behavior.
 
 ## Fixed Technology Stack
 
