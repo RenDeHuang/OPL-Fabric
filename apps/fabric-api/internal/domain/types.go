@@ -67,3 +67,21 @@ type DestroyResult struct {
 	Compute ComputeResource
 	Storage StorageVolume
 }
+
+type FabricOperation struct {
+	ID             string
+	CorrelationID  string
+	IdempotencyKey string
+	RequestedBy    string
+	ResourceID     string
+	ResourceKind   string
+	State          OperationState
+}
+
+type EvidenceRef struct {
+	ID          string
+	OperationID string
+	Kind        string
+	Ref         string
+	SHA256      string
+}
