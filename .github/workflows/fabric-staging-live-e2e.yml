@@ -30,7 +30,7 @@ on:
 jobs:
   staging-live-e2e:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       OPL_OPERATOR_TOKEN: ${{ secrets.OPL_OPERATOR_TOKEN }}
@@ -60,10 +60,11 @@ jobs:
 
       OPL_FABRIC_WORKER_ENABLED: "true"
       OPL_TKE_ALLOW_NODEPOOL_MUTATION: "true"
+      OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER: "1"
       OPL_STAGING_E2E_ALLOW_LIVE: "true"
       OPL_LIVE_E2E_PROVIDER_INSTANCE_TYPE: ${{ inputs.provider_instance_type }}
       OPL_LIVE_E2E_CHECK_ONLY: ${{ inputs.check_only }}
-      OPL_LIVE_E2E_TIMEOUT: 30m
+      OPL_LIVE_E2E_TIMEOUT: 75m
     steps:
       - name: Refuse unconfirmed live mutation
         if: ${{ inputs.check_only == 'false' && inputs.confirm_live != 'LIVE' }}

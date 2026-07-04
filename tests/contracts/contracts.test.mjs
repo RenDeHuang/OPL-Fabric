@@ -123,3 +123,14 @@ test("staging live e2e workspace image matches configured TCR namespace", () => 
   assert.equal(tcrNamespace, "oplcloud");
   assert.equal(workspaceImage, `uswccr.ccs.tencentyun.com/${tcrNamespace}/one-person-lab-app:latest`);
 });
+
+test("staging live e2e prewarms dedicated nodepools and allows TKE cold start", () => {
+  const workflow = readFileSync(".github/workflows/fabric-staging-live-e2e.yml", "utf8");
+  const desiredPodNumber = workflow.match(/^\s+OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER:\s+"?([^"\n]+)"?/m)?.[1];
+  const e2eTimeout = workflow.match(/^\s+OPL_LIVE_E2E_TIMEOUT:\s+(\S+)/m)?.[1];
+  const jobTimeout = workflow.match(/^\s+timeout-minutes:\s+(\d+)/m)?.[1];
+
+  assert.equal(desiredPodNumber, "1");
+  assert.match(e2eTimeout || "", /^[6-9]\d?m$/);
+  assert.ok(Number(jobTimeout) >= 90, "job timeout must leave room for live cleanup after TKE cold starts");
+});

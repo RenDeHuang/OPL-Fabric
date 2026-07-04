@@ -698,14 +698,21 @@ func (a capacityAdapter) EnsureNodePool(ctx context.Context, req fabricruntime.C
 	if err != nil {
 		return fabricruntime.CapacityNodePoolResult{}, err
 	}
+	log.Printf("nodepool created compute=%s workspace=%s nodePoolID=%s providerInstanceType=%s", req.ComputeID, req.WorkspaceID, result.NodePoolID, req.ProviderInstanceType)
 	return fabricruntime.CapacityNodePoolResult{NodePoolID: result.NodePoolID}, nil
 }
 
 func (a capacityAdapter) VerifyNodePool(ctx context.Context, nodePoolID string) (bool, error) {
-	return a.provider.VerifyNodePool(ctx, nodePoolID)
+	verified, err := a.provider.VerifyNodePool(ctx, nodePoolID)
+	if err != nil {
+		return false, err
+	}
+	log.Printf("nodepool verify nodePoolID=%s verified=%t", nodePoolID, verified)
+	return verified, nil
 }
 
 func (a capacityAdapter) DeleteNodePool(ctx context.Context, nodePoolID string) error {
+	log.Printf("nodepool delete nodePoolID=%s", nodePoolID)
 	return a.provider.DeleteNodePool(ctx, nodePoolID)
 }
 
