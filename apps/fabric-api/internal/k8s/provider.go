@@ -33,11 +33,17 @@ type Provider struct {
 }
 
 type CreateComputeInput struct {
-	ID            string
-	WorkspaceName string
-	PackageID     string
-	CPU           int
-	MemoryGB      int
+	ID                   string
+	WorkspaceName        string
+	ProductPresetID      string
+	ComputeShapeJSON     string
+	ProviderInstanceType string
+	CapacityPoolID       string
+	IsolationMode        string
+	NodePoolID           string
+	RuntimeRef           string
+	CPU                  int
+	MemoryGB             int
 }
 
 type CreateComputeResult struct {
@@ -55,6 +61,21 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 	}
 	annotations := map[string]string{
 		"oplcloud.cn/compute-id": input.ID,
+	}
+	if input.CapacityPoolID != "" {
+		annotations["oplcloud.cn/capacity-pool-id"] = input.CapacityPoolID
+	}
+	if input.IsolationMode != "" {
+		annotations["oplcloud.cn/isolation-mode"] = input.IsolationMode
+	}
+	if input.NodePoolID != "" {
+		annotations["oplcloud.cn/node-pool-id"] = input.NodePoolID
+	}
+	if input.RuntimeRef != "" {
+		annotations["oplcloud.cn/runtime-ref"] = input.RuntimeRef
+	}
+	if input.ProviderInstanceType != "" {
+		annotations["oplcloud.cn/provider-instance-type"] = input.ProviderInstanceType
 	}
 	codexSecretName := ""
 	if secret := p.codexSecret(name, labels); secret != nil {
@@ -85,7 +106,10 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 						Env: []corev1.EnvVar{
 							{Name: "OPL_COMPUTE_ID", Value: input.ID},
 							{Name: "OPL_WORKSPACE_NAME", Value: input.WorkspaceName},
-							{Name: "OPL_PACKAGE_ID", Value: input.PackageID},
+							{Name: "OPL_PRODUCT_PRESET_ID", Value: input.ProductPresetID},
+							{Name: "OPL_COMPUTE_SHAPE_JSON", Value: input.ComputeShapeJSON},
+							{Name: "OPL_CAPACITY_POOL_ID", Value: input.CapacityPoolID},
+							{Name: "OPL_ISOLATION_MODE", Value: input.IsolationMode},
 							{Name: "OPL_PROJECTS_DIR", Value: defaultString(p.WorkspaceProjectsDir, "/projects")},
 							{Name: "OPL_WEBUI_AUTH_MODE", Value: "none"},
 							{Name: "OPL_WORKSPACE_ROOT", Value: defaultString(p.WorkspaceProjectsDir, "/projects")},

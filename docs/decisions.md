@@ -10,7 +10,7 @@ one-person-lab is used as the development framework reference for contracts, lif
 
 ## 2026-07-03: OPL Cloud baseline pinned
 
-The OPL Cloud baseline for this split is:
+The original OPL Cloud baseline for this split was:
 
 - Repository: `RenDeHuang/OPL-Cloud`
 - Branch: `main`
@@ -19,20 +19,31 @@ The OPL Cloud baseline for this split is:
 - Commit message: `fix: tolerate workspace websocket resets`
 - Commit URL: `https://github.com/RenDeHuang/OPL-Cloud/commit/2985bfdaa592a0644da5fdb0c11a877785a85155`
 
-The source files used as the split reference are:
+That baseline is superseded by the active storage-first re-baseline below. It remains here only to explain the original repository split.
 
-- `packages/contracts/opl-cloud-product-contract.json`
-- `packages/contracts/opl-cloud-fabric-resource-catalog-contract.json`
-- `packages/contracts/opl-cloud-workspace-lifecycle-contract.json`
-- `packages/contracts/opl-cloud-storage-backup-contract.json`
-- `packages/contracts/opl-cloud-deployment-contract.json`
-- `packages/fabric/src/index.js`
-- `packages/fabric/src/resource-catalog.js`
-- `packages/fabric/src/runtime-provider-factory.js`
-- `packages/fabric/src/runtime-providers/local-docker.js`
-- `packages/fabric/src/runtime-providers/tencent-tke.js`
+Future OPL Cloud changes do not automatically redefine OPL Fabric contracts. Re-baseline by recording the new OPL Cloud commit, diffing newly relevant contracts and provider files, and then making explicit contract-first changes in OPL Fabric.
 
-Future OPL Cloud changes do not automatically redefine OPL Fabric contracts. Re-baseline by recording the new OPL Cloud commit, diffing the files above plus any newly relevant contracts, and then making explicit contract-first changes in OPL Fabric.
+## 2026-07-04: OPL Cloud storage-first re-baseline
+
+The active OPL Cloud comparison is:
+
+- Repository: `RenDeHuang/OPL-Cloud`
+- Branch: `main`
+- Commit: `854b047a28148f84912924856975b8c1f0077448`
+- Commit message: `fix: avoid custom pod cidr node pool setting`
+- Commit URL: `https://github.com/RenDeHuang/OPL-Cloud/commit/854b047a28148f84912924856975b8c1f0077448`
+
+This baseline changes the OPL Fabric direction:
+
+- Storage is the durable resource.
+- Compute is rebuildable capacity.
+- Storage attachment precedes Workspace entry creation.
+- TKE NodePool capacity is a cloud capacity concern, not the Kubernetes runtime object itself.
+- The old workspace bundle and copy-based storage lifecycle narrative is not carried forward as a compatibility layer.
+
+The stable implementation stack is fixed as React + TypeScript frontend, Go backend, PostgreSQL durable store, Kubernetes Go client-go runtime provider, Tencent Cloud Go SDK capacity provider, OpenAPI + JSON Schema contracts, and `config/` with `OPL_FABRIC_CONFIG_DIR` for runtime configuration.
+
+Normal runtime must not depend on `kubectl` shell-out, `tccli` shell-out, or JavaScript provider runtime.
 
 ## 2026-07-04: Central Fabric config directory
 

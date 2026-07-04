@@ -7,9 +7,6 @@ type OperationState string
 const (
 	ComputeCreating        ComputeState = "creating"
 	ComputeRunning         ComputeState = "running"
-	ComputeStopping        ComputeState = "stopping"
-	ComputeStopped         ComputeState = "stopped"
-	ComputeRestarting      ComputeState = "restarting"
 	ComputeDestroying      ComputeState = "destroying"
 	ComputeDestroyed       ComputeState = "destroyed"
 	ComputeFailed          ComputeState = "failed"
@@ -41,20 +38,45 @@ const (
 )
 
 type ComputeResource struct {
-	ID             string
-	OwnerAccountID string
-	PackageID      string
-	State          ComputeState
-	ProviderRef    string
+	ID                   string
+	OwnerAccountID       string
+	ProductPresetID      string
+	ComputeShapeJSON     string
+	ProviderInstanceType string
+	CapacityPoolID       string
+	IsolationMode        string
+	NodePoolID           string
+	RuntimeRef           string
+	State                ComputeState
+	ProviderRef          string
 }
 
 type StorageVolume struct {
-	ID             string
-	OwnerAccountID string
-	PackageID      string
-	State          StorageState
-	ProviderRef    string
-	SizeGB         int
+	ID              string
+	OwnerAccountID  string
+	ProductPresetID string
+	State           StorageState
+	ProviderRef     string
+	SizeGB          int
+	Retained        bool
+}
+
+type StorageAttachment struct {
+	ID          string
+	ComputeID   string
+	StorageID   string
+	State       StorageState
+	MountPath   string
+	ProviderRef string
+}
+
+type WorkspaceEntry struct {
+	ID           string
+	WorkspaceID  string
+	AttachmentID string
+	State        string
+	Host         string
+	Path         string
 }
 
 type DestroyStorageRequest struct {

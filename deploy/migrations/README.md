@@ -9,5 +9,7 @@ The Kubernetes manifest expects `DATABASE_URL` in the `opl-fabric-api-secrets` S
 ```bash
 kubectl create secret generic opl-fabric-api-secrets \
   --from-literal=DATABASE_URL='postgres://user:password@postgres:5432/opl_fabric?sslmode=disable' \
-  --from-literal=OPL_OPERATOR_TOKEN='replace-with-operator-token'
+  --from-literal=OPL_OPERATOR_TOKEN='replace-with-operator-token' \
+  --from-literal=TENCENT_MUTATION_SECRET_ID='replace-with-tencent-secret-id' \
+  --from-literal=TENCENT_MUTATION_SECRET_KEY='replace-with-tencent-secret-key'
 ```

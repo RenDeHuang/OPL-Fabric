@@ -2,7 +2,11 @@ module github.com/RenDeHuang/OPL-Fabric/apps/fabric-api
 
 go 1.22.2
 
-require github.com/jackc/pgx/v5 v5.5.5
+require (
+	github.com/jackc/pgx/v5 v5.5.5
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.123
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tke v1.3.123
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

@@ -2,9 +2,16 @@
 
 OPL Fabric is the Fabric control-plane service for OPL Cloud.
 
-It owns resource catalog, provider readiness, compute lifecycle, storage lifecycle, storage attachment, Workspace routing, backup and restore mechanics, Kubernetes provider execution, and Fabric evidence.
+It owns resource catalog, provider readiness, compute lifecycle, persistent storage lifecycle, storage attachment, Workspace entry routing, Kubernetes runtime execution, Tencent Cloud capacity execution, and Fabric evidence.
 
 It does not own OPL Console commercial flows, wallet and billing truth, OPL Ledger reconciliation, OPL Gateway AI routing, one-person-lab framework internals, or one-person-lab-app WebUI behavior.
+
+The product model is storage-first:
+
+- Storage is the durable user asset.
+- Compute is rebuildable execution capacity.
+- Storage can be detached from one compute resource and reattached to another.
+- A Workspace entry is derived from an attached storage volume, not from a bundled workspace package.
 
 ## Stack
 
@@ -12,6 +19,17 @@ It does not own OPL Console commercial flows, wallet and billing truth, OPL Ledg
 - Backend: Go
 - DB: PostgreSQL
 - Kubernetes: Go client-go
+- Cloud Provider: Tencent Cloud Go SDK
+- API Contract: OpenAPI + JSON Schema
+- Runtime Config: `config/` + `OPL_FABRIC_CONFIG_DIR`
+
+Long-term runtime dependencies explicitly forbidden:
+
+- no `kubectl` shell-out for normal runtime
+- no `tccli` shell-out for normal runtime
+- no JavaScript provider runtime
+
+Kubernetes runtime truth comes from Kubernetes API/client-go. Tencent Cloud capacity truth comes from Tencent Cloud Go SDK. Fabric durable truth comes from PostgreSQL.
 
 ## Configuration
 
@@ -65,15 +83,18 @@ OPL_OPERATOR_TOKEN=dev-operator-token npm --prefix apps/fabric-console run dev
 - Default image `opl-fabric-api:local`; replace it with a registry image in your deployment pipeline or overlay.
 - `OPL_K8S_NAMESPACE` populated from the pod metadata namespace.
 - Workspace defaults matching backend config: `OPL_WORKSPACE_IMAGE`, `OPL_WORKSPACE_DOMAIN`, and `OPL_WORKSPACE_STORAGE_CLASS`.
+- Tencent capacity defaults are placeholders only: `TENCENT_TKE_REGION`, `TENCENT_DEPLOY_CLUSTER_ID`, TCR refs, and hourly node pool charge type. Real mutation credentials must come from Secret keys.
 
 The manifest expects this placeholder Secret in the same namespace:
 
 ```bash
 kubectl create secret generic opl-fabric-api-secrets \
   --from-literal=DATABASE_URL='postgres://user:password@postgres:5432/opl_fabric?sslmode=disable' \
-  --from-literal=OPL_OPERATOR_TOKEN='replace-with-operator-token'
+  --from-literal=OPL_OPERATOR_TOKEN='replace-with-operator-token' \
+  --from-literal=TENCENT_MUTATION_SECRET_ID='replace-with-tencent-secret-id' \
+  --from-literal=TENCENT_MUTATION_SECRET_KEY='replace-with-tencent-secret-key'
 ```
 
-`DATABASE_URL` is consumed by the PostgreSQL store. `OPL_OPERATOR_TOKEN` is required by the HTTP server for Bearer authentication.
+`DATABASE_URL` is consumed by the PostgreSQL store. `OPL_OPERATOR_TOKEN` is required by the HTTP server for Bearer authentication. Tencent mutation credentials are for the Tencent Cloud Go SDK capacity boundary.
 
 Future reconcile/status flows that read, watch, patch, or update Kubernetes objects must expand the Role deliberately with matching tests and review.

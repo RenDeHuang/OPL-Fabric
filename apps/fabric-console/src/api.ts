@@ -10,38 +10,86 @@ export interface Readiness {
 export interface Catalog {
   schemaVersion: number;
   owner: string;
-  workspacePackages: WorkspacePackage[];
+  productPresets: ProductPreset[];
   computeProfiles: ComputeProfile[];
+  providerInstanceTypes: ProviderInstanceType[];
+  capacityPools: CapacityPool[];
+  schedulingPolicies: SchedulingPolicy[];
   storageClasses: StorageClass[];
   workspaceImages: WorkspaceImage[];
   ingressDomains: IngressDomain[];
 }
 
-export interface WorkspacePackage {
+export interface ProductPreset {
   id: string;
   name: string;
   accelerator: string;
-  cpu: number;
-  memoryGb: number;
-  gpu: number;
-  server: string;
-  diskGb: number;
+  defaultCpu: number;
+  defaultMemoryGb: number;
+  defaultGpu: number;
+  defaultDiskGb: number;
   available: boolean;
   unavailableReason?: string;
   computeProfileId: string;
   storageClassId: string;
   workspaceImageId: string;
   ingressDomainId: string;
+  schedulingPolicyId: string;
 }
 
 export interface ComputeProfile {
   id: string;
+  name: string;
   accelerator: string;
   provider: string;
-  cpu: number;
-  memoryGb: number;
-  gpu: number;
+  minCpu: number;
+  maxCpu: number;
+  minMemoryGb: number;
+  maxMemoryGb: number;
+  maxGpu: number;
+  customShapesAllowed: boolean;
   available: boolean;
+  unavailableReason?: string;
+}
+
+export interface ProviderInstanceType {
+  id: string;
+  provider: string;
+  region: string;
+  zone?: string;
+  family: string;
+  instanceType: string;
+  accelerator: string;
+  minCpu: number;
+  maxCpu: number;
+  minMemoryGb: number;
+  maxMemoryGb: number;
+  maxGpu: number;
+  capacityPoolIds: string[];
+  available: boolean;
+  priceHint?: string;
+}
+
+export interface CapacityPool {
+  id: string;
+  provider: string;
+  kind: string;
+  isolationMode: string;
+  region: string;
+  zone?: string;
+  providerRef?: string;
+  computeProfileIds: string[];
+  available: boolean;
+  unavailableReason?: string;
+}
+
+export interface SchedulingPolicy {
+  id: string;
+  mode: string;
+  capacityPoolKind: string;
+  createPoolIfMissing: boolean;
+  rejectIfNoCapacity: boolean;
+  description: string;
 }
 
 export interface StorageClass {

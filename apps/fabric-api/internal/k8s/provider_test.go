@@ -21,11 +21,11 @@ func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
 
 	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
-		ID:            "compute-1",
-		WorkspaceName: "Alpha",
-		PackageID:     "basic",
-		CPU:           2,
-		MemoryGB:      4,
+		ID:              "compute-1",
+		WorkspaceName:   "Alpha",
+		ProductPresetID: "basic",
+		CPU:             2,
+		MemoryGB:        4,
 	})
 	if err != nil {
 		t.Fatalf("create compute failed: %v", err)
@@ -83,9 +83,9 @@ func TestCreateComputeUsesBoundedDNSNameAndSafeLabels(t *testing.T) {
 	longID := "Compute_" + strings.Repeat("ABC123_", 20)
 
 	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
-		ID:            longID,
-		WorkspaceName: "Alpha",
-		PackageID:     "basic",
+		ID:              longID,
+		WorkspaceName:   "Alpha",
+		ProductPresetID: "basic",
 	})
 	if err != nil {
 		t.Fatalf("create compute failed: %v", err)
@@ -126,9 +126,9 @@ func TestCreateComputeCleansDeploymentWhenServiceCreateFails(t *testing.T) {
 	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
 
 	_, err := provider.CreateCompute(context.Background(), CreateComputeInput{
-		ID:            "compute-1",
-		WorkspaceName: "Alpha",
-		PackageID:     "basic",
+		ID:              "compute-1",
+		WorkspaceName:   "Alpha",
+		ProductPresetID: "basic",
 	})
 	if err == nil {
 		t.Fatal("expected service create failure")
@@ -153,15 +153,67 @@ func TestCreateComputeReportsCleanupFailure(t *testing.T) {
 	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
 
 	_, err := provider.CreateCompute(context.Background(), CreateComputeInput{
-		ID:            "compute-1",
-		WorkspaceName: "Alpha",
-		PackageID:     "basic",
+		ID:              "compute-1",
+		WorkspaceName:   "Alpha",
+		ProductPresetID: "basic",
 	})
 	if !errors.Is(err, serviceErr) {
 		t.Fatalf("expected service error, got %v", err)
 	}
 	if !errors.Is(err, deleteErr) {
 		t.Fatalf("expected cleanup error, got %v", err)
+	}
+}
+
+func TestCreateComputeCarriesCapacityBoundaryMetadata(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+
+	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
+		ID:                   "compute-capacity",
+		WorkspaceName:        "Capacity",
+		ProductPresetID:      "custom",
+		ComputeShapeJSON:     `{"cpu":4,"memoryGb":8}`,
+		ProviderInstanceType: "SA5.LARGE8",
+		CapacityPoolID:       "dedicated-nodepool-template",
+		IsolationMode:        "dedicated_nodepool",
+		NodePoolID:           "np-example",
+		RuntimeRef:           "deployment/compute-capacity",
+	})
+	if err != nil {
+		t.Fatalf("CreateCompute: %v", err)
+	}
+
+	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
+	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("deployment missing: %v", err)
+	}
+	for key, want := range map[string]string{
+		"oplcloud.cn/capacity-pool-id":       "dedicated-nodepool-template",
+		"oplcloud.cn/isolation-mode":         "dedicated_nodepool",
+		"oplcloud.cn/node-pool-id":           "np-example",
+		"oplcloud.cn/runtime-ref":            "deployment/compute-capacity",
+		"oplcloud.cn/provider-instance-type": "SA5.LARGE8",
+	} {
+		if deploy.Annotations[key] != want {
+			t.Fatalf("annotation %s = %q, want %q", key, deploy.Annotations[key], want)
+		}
+	}
+
+	env := map[string]string{}
+	for _, item := range deploy.Spec.Template.Spec.Containers[0].Env {
+		env[item.Name] = item.Value
+	}
+	for key, want := range map[string]string{
+		"OPL_PRODUCT_PRESET_ID":  "custom",
+		"OPL_COMPUTE_SHAPE_JSON": `{"cpu":4,"memoryGb":8}`,
+		"OPL_CAPACITY_POOL_ID":   "dedicated-nodepool-template",
+		"OPL_ISOLATION_MODE":     "dedicated_nodepool",
+	} {
+		if env[key] != want {
+			t.Fatalf("env %s = %q, want %q", key, env[key], want)
+		}
 	}
 }
 
@@ -177,7 +229,7 @@ func TestCreateComputeInjectsWorkspaceRuntimeConfig(t *testing.T) {
 		CodexHome:            "/data/codex",
 	}
 
-	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-runtime", WorkspaceName: "Runtime", PackageID: "basic"})
+	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-runtime", WorkspaceName: "Runtime", ProductPresetID: "basic"})
 	if err != nil {
 		t.Fatalf("CreateCompute: %v", err)
 	}
@@ -222,7 +274,7 @@ func TestCreateComputeAddsCodexSecretEnvWhenConfigured(t *testing.T) {
 		CodexProviderName:    "gflabtoken",
 	}
 
-	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-codex", WorkspaceName: "Codex", PackageID: "basic"})
+	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-codex", WorkspaceName: "Codex", ProductPresetID: "basic"})
 	if err != nil {
 		t.Fatalf("CreateCompute: %v", err)
 	}

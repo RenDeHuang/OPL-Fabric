@@ -9,6 +9,16 @@ type Config struct {
 	KubernetesNamespace string
 	IngressClass        string
 	ImagePullSecretName string
+	WorkspaceImage      string
+	WorkspaceDomain     string
+	StorageClass        string
+	TencentTKERegion    string
+	TencentClusterID    string
+	TencentSecretID     string
+	TencentSecretKey    string
+	TencentTCRRegistry  string
+	TencentTCRNamespace string
+	TencentTCRRegion    string
 }
 
 type Service struct {
@@ -18,6 +28,16 @@ type Service struct {
 	kubernetesNamespace string
 	ingressClass        string
 	imagePullSecretName string
+	workspaceImage      string
+	workspaceDomain     string
+	storageClass        string
+	tencentTKERegion    string
+	tencentClusterID    string
+	tencentSecretID     string
+	tencentSecretKey    string
+	tencentTCRRegistry  string
+	tencentTCRNamespace string
+	tencentTCRRegion    string
 }
 
 type Readiness struct {
@@ -37,6 +57,16 @@ func New(cfg Config) *Service {
 		kubernetesNamespace: cfg.KubernetesNamespace,
 		ingressClass:        cfg.IngressClass,
 		imagePullSecretName: cfg.ImagePullSecretName,
+		workspaceImage:      cfg.WorkspaceImage,
+		workspaceDomain:     cfg.WorkspaceDomain,
+		storageClass:        cfg.StorageClass,
+		tencentTKERegion:    cfg.TencentTKERegion,
+		tencentClusterID:    cfg.TencentClusterID,
+		tencentSecretID:     cfg.TencentSecretID,
+		tencentSecretKey:    cfg.TencentSecretKey,
+		tencentTCRRegistry:  cfg.TencentTCRRegistry,
+		tencentTCRNamespace: cfg.TencentTCRNamespace,
+		tencentTCRRegion:    cfg.TencentTCRRegion,
 	}
 }
 
@@ -72,6 +102,36 @@ func (s *Service) missingEnv() []string {
 	}
 	if s.imagePullSecretName == "" {
 		missing = append(missing, "OPL_IMAGE_PULL_SECRET_NAME")
+	}
+	if s.workspaceImage == "" {
+		missing = append(missing, "OPL_WORKSPACE_IMAGE")
+	}
+	if s.workspaceDomain == "" {
+		missing = append(missing, "OPL_WORKSPACE_DOMAIN")
+	}
+	if s.storageClass == "" {
+		missing = append(missing, "OPL_WORKSPACE_STORAGE_CLASS")
+	}
+	if s.tencentTKERegion == "" {
+		missing = append(missing, "TENCENT_TKE_REGION")
+	}
+	if s.tencentClusterID == "" {
+		missing = append(missing, "TENCENT_DEPLOY_CLUSTER_ID")
+	}
+	if s.tencentSecretID == "" {
+		missing = append(missing, "TENCENT_MUTATION_SECRET_ID")
+	}
+	if s.tencentSecretKey == "" {
+		missing = append(missing, "TENCENT_MUTATION_SECRET_KEY")
+	}
+	if s.tencentTCRRegistry == "" {
+		missing = append(missing, "TENCENT_TCR_REGISTRY")
+	}
+	if s.tencentTCRNamespace == "" {
+		missing = append(missing, "TENCENT_TCR_NAMESPACE")
+	}
+	if s.tencentTCRRegion == "" {
+		missing = append(missing, "TENCENT_TCR_REGION")
 	}
 	return missing
 }

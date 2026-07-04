@@ -4,51 +4,121 @@
   "title": "OPL Fabric Resource Catalog",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "owner", "workspacePackages", "computeProfiles", "storageClasses", "workspaceImages", "ingressDomains"],
+  "required": [
+    "schemaVersion",
+    "owner",
+    "productPresets",
+    "computeProfiles",
+    "providerInstanceTypes",
+    "capacityPools",
+    "schedulingPolicies",
+    "storageClasses",
+    "workspaceImages",
+    "ingressDomains"
+  ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "owner": { "const": "OPL Fabric" },
-    "workspacePackages": { "type": "array", "items": { "$ref": "#/$defs/workspacePackage" } },
+    "productPresets": { "type": "array", "items": { "$ref": "#/$defs/productPreset" } },
     "computeProfiles": { "type": "array", "items": { "$ref": "#/$defs/computeProfile" } },
+    "providerInstanceTypes": { "type": "array", "items": { "$ref": "#/$defs/providerInstanceType" } },
+    "capacityPools": { "type": "array", "items": { "$ref": "#/$defs/capacityPool" } },
+    "schedulingPolicies": { "type": "array", "items": { "$ref": "#/$defs/schedulingPolicy" } },
     "storageClasses": { "type": "array", "items": { "$ref": "#/$defs/storageClass" } },
     "workspaceImages": { "type": "array", "items": { "$ref": "#/$defs/workspaceImage" } },
     "ingressDomains": { "type": "array", "items": { "$ref": "#/$defs/ingressDomain" } }
   },
   "$defs": {
-    "workspacePackage": {
+    "productPreset": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "accelerator", "cpu", "memoryGb", "gpu", "server", "diskGb", "available", "computeProfileId", "storageClassId", "workspaceImageId", "ingressDomainId"],
+      "required": ["id", "name", "accelerator", "defaultCpu", "defaultMemoryGb", "defaultGpu", "defaultDiskGb", "available", "computeProfileId", "storageClassId", "workspaceImageId", "ingressDomainId", "schedulingPolicyId"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "name": { "type": "string", "minLength": 1 },
         "accelerator": { "enum": ["cpu", "gpu"] },
-        "cpu": { "type": "integer", "minimum": 1 },
-        "memoryGb": { "type": "integer", "minimum": 1 },
-        "gpu": { "type": "integer", "minimum": 0 },
-        "server": { "type": "string", "minLength": 1 },
-        "diskGb": { "type": "integer", "minimum": 1 },
+        "defaultCpu": { "type": "integer", "minimum": 1 },
+        "defaultMemoryGb": { "type": "integer", "minimum": 1 },
+        "defaultGpu": { "type": "integer", "minimum": 0 },
+        "defaultDiskGb": { "type": "integer", "minimum": 1 },
         "available": { "type": "boolean" },
         "unavailableReason": { "type": "string", "minLength": 1 },
         "computeProfileId": { "type": "string", "minLength": 1 },
         "storageClassId": { "type": "string", "minLength": 1 },
         "workspaceImageId": { "type": "string", "minLength": 1 },
-        "ingressDomainId": { "type": "string", "minLength": 1 }
+        "ingressDomainId": { "type": "string", "minLength": 1 },
+        "schedulingPolicyId": { "type": "string", "minLength": 1 }
       }
     },
     "computeProfile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "accelerator", "cpu", "memoryGb", "gpu", "available", "provider"],
+      "required": ["id", "name", "accelerator", "provider", "minCpu", "maxCpu", "minMemoryGb", "maxMemoryGb", "maxGpu", "customShapesAllowed", "available"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
         "accelerator": { "enum": ["cpu", "gpu"] },
-        "cpu": { "type": "integer", "minimum": 1 },
-        "memoryGb": { "type": "integer", "minimum": 1 },
-        "gpu": { "type": "integer", "minimum": 0 },
-        "available": { "type": "boolean" },
         "provider": { "type": "string", "minLength": 1 },
+        "minCpu": { "type": "integer", "minimum": 1 },
+        "maxCpu": { "type": "integer", "minimum": 1 },
+        "minMemoryGb": { "type": "integer", "minimum": 1 },
+        "maxMemoryGb": { "type": "integer", "minimum": 1 },
+        "maxGpu": { "type": "integer", "minimum": 0 },
+        "customShapesAllowed": { "type": "boolean" },
+        "available": { "type": "boolean" },
         "unavailableReason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "providerInstanceType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "provider", "region", "family", "instanceType", "accelerator", "minCpu", "maxCpu", "minMemoryGb", "maxMemoryGb", "maxGpu", "capacityPoolIds", "available"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "region": { "type": "string", "minLength": 1 },
+        "zone": { "type": "string", "minLength": 1 },
+        "family": { "type": "string", "minLength": 1 },
+        "instanceType": { "type": "string", "minLength": 1 },
+        "accelerator": { "enum": ["cpu", "gpu"] },
+        "minCpu": { "type": "integer", "minimum": 1 },
+        "maxCpu": { "type": "integer", "minimum": 1 },
+        "minMemoryGb": { "type": "integer", "minimum": 1 },
+        "maxMemoryGb": { "type": "integer", "minimum": 1 },
+        "maxGpu": { "type": "integer", "minimum": 0 },
+        "capacityPoolIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "available": { "type": "boolean" },
+        "priceHint": { "type": "string", "minLength": 1 }
+      }
+    },
+    "capacityPool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "provider", "kind", "isolationMode", "region", "computeProfileIds", "available"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["shared", "dedicated_template", "dedicated"] },
+        "isolationMode": { "enum": ["shared_pool", "dedicated_nodepool"] },
+        "region": { "type": "string", "minLength": 1 },
+        "zone": { "type": "string", "minLength": 1 },
+        "providerRef": { "type": "string", "minLength": 1 },
+        "computeProfileIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "available": { "type": "boolean" },
+        "unavailableReason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "schedulingPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mode", "capacityPoolKind", "createPoolIfMissing", "rejectIfNoCapacity", "description"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "mode": { "enum": ["shared_pool", "dedicated_nodepool"] },
+        "capacityPoolKind": { "enum": ["shared", "dedicated_template", "dedicated"] },
+        "createPoolIfMissing": { "type": "boolean" },
+        "rejectIfNoCapacity": { "type": "boolean" },
+        "description": { "type": "string", "minLength": 1 }
       }
     },
     "storageClass": {

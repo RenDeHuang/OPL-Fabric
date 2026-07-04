@@ -82,6 +82,18 @@ spec:
               value: qcloud
             - name: OPL_IMAGE_PULL_SECRET_NAME
               value: tcr-pull-secret
+            - name: TENCENT_TKE_REGION
+              value: ap-guangzhou
+            - name: TENCENT_DEPLOY_CLUSTER_ID
+              value: cls-xxxxxxxx
+            - name: TENCENT_TCR_REGISTRY
+              value: registry.example.com
+            - name: TENCENT_TCR_NAMESPACE
+              value: opl
+            - name: TENCENT_TCR_REGION
+              value: ap-guangzhou
+            - name: OPL_TKE_INSTANCE_CHARGE_TYPE
+              value: POSTPAID_BY_HOUR
             - name: OPL_CODEX_MODEL
               value: gpt-5.5
             - name: OPL_CODEX_REASONING_EFFORT
@@ -106,6 +118,16 @@ spec:
                   name: opl-fabric-api-secrets
                   key: OPL_CODEX_API_KEY
                   optional: true
+            - name: TENCENT_MUTATION_SECRET_ID
+              valueFrom:
+                secretKeyRef:
+                  name: opl-fabric-api-secrets
+                  key: TENCENT_MUTATION_SECRET_ID
+            - name: TENCENT_MUTATION_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: opl-fabric-api-secrets
+                  key: TENCENT_MUTATION_SECRET_KEY
 ---
 apiVersion: v1
 kind: Service

@@ -12,14 +12,20 @@
     "OPL_WORKSPACE_STORAGE_CLASS",
     "TENCENT_DEPLOY_KUBECONFIG_REF",
     "TENCENT_DEPLOY_CLUSTER_ID",
+    "TENCENT_TKE_REGION",
+    "TENCENT_MUTATION_SECRET_ID",
+    "TENCENT_MUTATION_SECRET_KEY",
     "TENCENT_TCR_REGISTRY",
     "TENCENT_TCR_NAMESPACE",
     "TENCENT_TCR_REGION"
   ],
   "optionalEnv": [
-    "OPL_WORKSPACE_VOLUME_SNAPSHOT_CLASS",
     "OPL_WORKSPACE_NODE_SELECTOR_KEY",
     "OPL_WORKSPACE_NODE_SELECTOR_VALUE",
+    "OPL_TKE_NODEPOOL_AUTOSCALING_GROUP_PARA_JSON",
+    "OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON",
+    "OPL_TKE_INSTANCE_CHARGE_TYPE",
+    "OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER",
     "OPL_TLS_CERT_ID",
     "OPL_WORKSPACE_TLS_SECRET_NAME",
     "OPL_WORKSPACE_TLS_CERT_ID",
@@ -40,8 +46,9 @@
     "image_pull_secret_exists",
     "ingress_class_exists",
     "shared_ingress_exists_or_creatable",
-    "volume_snapshot_crd_exists",
-    "volume_snapshot_class_exists_when_configured"
+    "tencent_tke_cluster_access",
+    "tencent_nodepool_template_valid",
+    "tencent_capacity_quota_available"
   ],
   "workspaceContract": {
     "webuiPort": 3000,

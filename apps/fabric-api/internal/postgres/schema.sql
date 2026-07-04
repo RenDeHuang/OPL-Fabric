@@ -1,7 +1,13 @@
 CREATE TABLE IF NOT EXISTS compute_resources (
   id TEXT PRIMARY KEY,
   owner_account_id TEXT NOT NULL,
-  package_id TEXT NOT NULL,
+  product_preset_id TEXT NOT NULL DEFAULT '',
+  compute_shape_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  provider_instance_type TEXT NOT NULL DEFAULT '',
+  capacity_pool_id TEXT NOT NULL DEFAULT '',
+  isolation_mode TEXT NOT NULL DEFAULT '',
+  node_pool_id TEXT NOT NULL DEFAULT '',
+  runtime_ref TEXT NOT NULL DEFAULT '',
   state TEXT NOT NULL,
   provider_ref TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -11,10 +17,11 @@ CREATE TABLE IF NOT EXISTS compute_resources (
 CREATE TABLE IF NOT EXISTS storage_volumes (
   id TEXT PRIMARY KEY,
   owner_account_id TEXT NOT NULL,
-  package_id TEXT NOT NULL,
+  product_preset_id TEXT NOT NULL DEFAULT '',
   state TEXT NOT NULL,
   provider_ref TEXT NOT NULL DEFAULT '',
   size_gb INTEGER NOT NULL CHECK (size_gb > 0),
+  retained BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -25,26 +32,18 @@ CREATE TABLE IF NOT EXISTS storage_attachments (
   storage_id TEXT NOT NULL REFERENCES storage_volumes(id),
   state TEXT NOT NULL,
   mount_path TEXT NOT NULL,
+  provider_ref TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS workspace_routes (
+CREATE TABLE IF NOT EXISTS workspace_entries (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
-  compute_id TEXT NOT NULL REFERENCES compute_resources(id),
+  attachment_id TEXT NOT NULL REFERENCES storage_attachments(id),
   state TEXT NOT NULL,
   host TEXT NOT NULL,
   path TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS storage_backups (
-  id TEXT PRIMARY KEY,
-  storage_id TEXT NOT NULL REFERENCES storage_volumes(id),
-  state TEXT NOT NULL,
-  provider_ref TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

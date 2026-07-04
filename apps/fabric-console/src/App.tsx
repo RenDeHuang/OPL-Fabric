@@ -12,7 +12,7 @@ import {
   Wrench
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { fetchReadiness, type Catalog, type Readiness, type WorkspacePackage } from "./api";
+import { fetchReadiness, type Catalog, type ProductPreset, type Readiness } from "./api";
 
 type LoadState =
   | { status: "loading" }
@@ -75,7 +75,7 @@ function App() {
       <Header onRefresh={loadReadiness} />
       <ReadinessSummary readiness={state.readiness} />
       <OperationsGrid readiness={state.readiness} />
-      <WorkspacePackages packages={state.readiness.resourceCatalog.workspacePackages} />
+      <ProductPresets presets={state.readiness.resourceCatalog.productPresets} />
       <CatalogSummary catalog={state.readiness.resourceCatalog} />
     </main>
   );
@@ -109,7 +109,7 @@ function ReadinessSummary({ readiness }: { readiness: Readiness }) {
           <Metric label="Provider" value={readiness.provider || "unknown"} />
           <Metric label="Missing env" value={readiness.missingEnv.length.toString()} />
           <Metric label="Blockers" value={readiness.blockers.length.toString()} />
-          <Metric label="Packages" value={readiness.resourceCatalog.workspacePackages.length.toString()} />
+          <Metric label="Presets" value={readiness.resourceCatalog.productPresets.length.toString()} />
         </dl>
       </div>
     </section>
@@ -159,31 +159,31 @@ function DetailPanel({
   );
 }
 
-function WorkspacePackages({ packages }: { packages: WorkspacePackage[] }) {
+function ProductPresets({ presets }: { presets: ProductPreset[] }) {
   return (
     <section className="panel workspace-panel">
       <div className="panel-heading">
         <Package size={17} aria-hidden="true" />
-        <h3>Workspace Packages</h3>
-        <span>{packages.length}</span>
+        <h3>Product Presets</h3>
+        <span>{presets.length}</span>
       </div>
-      <div className="package-table" role="table" aria-label="Workspace packages">
+      <div className="package-table" role="table" aria-label="Product presets">
         <div className="package-row table-head" role="row">
-          <span role="columnheader">Package</span>
-          <span role="columnheader">Shape</span>
+          <span role="columnheader">Preset</span>
+          <span role="columnheader">Default Shape</span>
           <span role="columnheader">Storage</span>
-          <span role="columnheader">Refs</span>
+          <span role="columnheader">Policy</span>
           <span role="columnheader">State</span>
         </div>
-        {packages.map((item) => (
-          <PackageRow key={item.id} item={item} />
+        {presets.map((item) => (
+          <PresetRow key={item.id} item={item} />
         ))}
       </div>
     </section>
   );
 }
 
-function PackageRow({ item }: { item: WorkspacePackage }) {
+function PresetRow({ item }: { item: ProductPreset }) {
   return (
     <div className="package-row" role="row">
       <div className="package-name" role="cell">
@@ -191,17 +191,17 @@ function PackageRow({ item }: { item: WorkspacePackage }) {
         <span>{item.id}</span>
       </div>
       <div role="cell">
-        <span className="mono">{item.server}</span>
-        <small>
-          {item.cpu} CPU / {item.memoryGb} GB / {item.gpu} GPU
-        </small>
+        <span className="mono">
+          {item.defaultCpu}c / {item.defaultMemoryGb}g / {item.defaultGpu}gpu
+        </span>
+        <small>custom shapes via {item.computeProfileId}</small>
       </div>
       <div role="cell">
-        <span>{item.diskGb} GB</span>
+        <span>{item.defaultDiskGb} GB</span>
         <small>{item.storageClassId}</small>
       </div>
       <div role="cell">
-        <span>{item.computeProfileId}</span>
+        <span>{item.schedulingPolicyId}</span>
         <small>{item.workspaceImageId}</small>
       </div>
       <div role="cell">
@@ -216,6 +216,8 @@ function CatalogSummary({ catalog }: { catalog: Catalog }) {
   const unavailable = useMemo(
     () => [
       ...catalog.computeProfiles.filter((item) => !item.available).map((item) => `compute:${item.id}`),
+      ...catalog.providerInstanceTypes.filter((item) => !item.available).map((item) => `instance:${item.id}`),
+      ...catalog.capacityPools.filter((item) => !item.available).map((item) => `pool:${item.id}`),
       ...catalog.storageClasses.filter((item) => !item.available).map((item) => `storage:${item.id}`),
       ...catalog.workspaceImages.filter((item) => !item.available).map((item) => `image:${item.id}`),
       ...catalog.ingressDomains.filter((item) => !item.available).map((item) => `ingress:${item.id}`)
@@ -226,7 +228,10 @@ function CatalogSummary({ catalog }: { catalog: Catalog }) {
   return (
     <section className="catalog-grid" aria-label="Resource catalog">
       <CatalogTile icon={<Cpu size={18} aria-hidden="true" />} label="Compute" count={catalog.computeProfiles.length} />
+      <CatalogTile icon={<Server size={18} aria-hidden="true" />} label="Instance Types" count={catalog.providerInstanceTypes.length} />
+      <CatalogTile icon={<Activity size={18} aria-hidden="true" />} label="Capacity Pools" count={catalog.capacityPools.length} />
       <CatalogTile icon={<HardDrive size={18} aria-hidden="true" />} label="Storage" count={catalog.storageClasses.length} />
+      <CatalogTile icon={<Package size={18} aria-hidden="true" />} label="Policies" count={catalog.schedulingPolicies.length} />
       <CatalogTile icon={<Server size={18} aria-hidden="true" />} label="Images" count={catalog.workspaceImages.length} />
       <CatalogTile icon={<Activity size={18} aria-hidden="true" />} label="Ingress" count={catalog.ingressDomains.length} />
       <section className="panel unavailable-panel">

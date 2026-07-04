@@ -10,7 +10,6 @@
     "OPL_WORKSPACE_DATA_DIR": { "value": "/data" },
     "OPL_WORKSPACE_PROJECTS_DIR": { "value": "/projects" },
     "OPL_WORKSPACE_STORAGE_CLASS": { "value": "cbs" },
-    "OPL_WORKSPACE_VOLUME_SNAPSHOT_CLASS": { "value": "" },
     "OPL_WORKSPACE_NODE_SELECTOR_KEY": { "value": "medopl.cn/workload" },
     "OPL_WORKSPACE_NODE_SELECTOR_VALUE": { "value": "medopl" },
     "OPL_K8S_NAMESPACE": { "value": "opl-cloud" },
@@ -28,8 +27,15 @@
     "CODEX_HOME": { "value": "/data/codex" },
     "TENCENT_DEPLOY_KUBECONFIG_REF": { "secretRef": "opl-fabric/tencent-deploy-kubeconfig-ref" },
     "TENCENT_DEPLOY_CLUSTER_ID": { "value": "cls-xxxxxxxx" },
+    "TENCENT_TKE_REGION": { "value": "ap-guangzhou" },
+    "TENCENT_MUTATION_SECRET_ID": { "secretRef": "opl-fabric/tencent-mutation-secret-id" },
+    "TENCENT_MUTATION_SECRET_KEY": { "secretRef": "opl-fabric/tencent-mutation-secret-key" },
     "TENCENT_TCR_REGISTRY": { "value": "registry.example.com" },
     "TENCENT_TCR_NAMESPACE": { "value": "opl" },
-    "TENCENT_TCR_REGION": { "value": "ap-guangzhou" }
+    "TENCENT_TCR_REGION": { "value": "ap-guangzhou" },
+    "OPL_TKE_NODEPOOL_AUTOSCALING_GROUP_PARA_JSON": { "value": "" },
+    "OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON": { "value": "" },
+    "OPL_TKE_INSTANCE_CHARGE_TYPE": { "value": "POSTPAID_BY_HOUR" },
+    "OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER": { "value": "" }
   }
 }

@@ -14,8 +14,10 @@ Committed files are examples and key manifests only. Do not commit real password
 - `tke/workspace-runtime.env.example`: workspace pod/runtime defaults derived from medopl-3.
 - `tke/readiness-checks.json`: readiness checks OPL-Fabric should perform before production traffic.
 - `tke/secret-refs.example.json`: Kubernetes Secret and external secret reference names.
-- `sources/medopl-3-baseline.md`: source baseline and migration notes from medopl-3.
+- `sources/medopl-3-baseline.md`: source baseline and migration notes from medopl-3 and the active OPL Cloud baseline.
 
 ## Runtime Loading
 
 The Go process still reads final values from environment variables. This directory defines the canonical names, defaults, and secret references used by local env files, Kubernetes manifests, and future render tools.
+
+The runtime stack is fixed: Kubernetes operations use Go client-go, Tencent capacity operations use Tencent Cloud Go SDK, and Fabric state uses PostgreSQL. `kubectl`, `tccli`, and JavaScript provider runtimes are reference-only patterns and must not become normal runtime dependencies.

@@ -25,6 +25,16 @@ func main() {
 		KubernetesNamespace: cfg.KubernetesNamespace,
 		IngressClass:        cfg.IngressClass,
 		ImagePullSecretName: cfg.ImagePullSecretName,
+		WorkspaceImage:      cfg.WorkspaceImage,
+		WorkspaceDomain:     cfg.WorkspaceDomain,
+		StorageClass:        cfg.StorageClass,
+		TencentTKERegion:    cfg.TencentTKERegion,
+		TencentClusterID:    cfg.TencentDeployClusterID,
+		TencentSecretID:     cfg.TencentMutationSecretID,
+		TencentSecretKey:    cfg.TencentMutationSecretKey,
+		TencentTCRRegistry:  cfg.TencentTCRRegistry,
+		TencentTCRNamespace: cfg.TencentTCRNamespace,
+		TencentTCRRegion:    cfg.TencentTCRRegion,
 	})
 	handler := httpapi.NewServer(svc, httpapi.Config{OperatorToken: cfg.OperatorToken})
 

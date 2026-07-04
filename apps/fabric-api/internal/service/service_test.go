@@ -17,6 +17,9 @@ func TestReadinessRequiresProductionFabricKeys(t *testing.T) {
 		"OPL_OPERATOR_TOKEN",
 		"OPL_INGRESS_CLASS",
 		"OPL_IMAGE_PULL_SECRET_NAME",
+		"TENCENT_TKE_REGION",
+		"TENCENT_MUTATION_SECRET_ID",
+		"TENCENT_MUTATION_SECRET_KEY",
 	} {
 		if !slices.Contains(readiness.MissingEnv, key) {
 			t.Fatalf("MissingEnv = %v, want %s", readiness.MissingEnv, key)
@@ -35,6 +38,16 @@ func TestReadinessAllowsOptionalCodexSecret(t *testing.T) {
 		KubernetesNamespace: "opl-cloud",
 		IngressClass:        "qcloud",
 		ImagePullSecretName: "tcr-pull-secret",
+		WorkspaceImage:      "workspace:latest",
+		WorkspaceDomain:     "workspace.medopl.cn",
+		StorageClass:        "cbs",
+		TencentTKERegion:    "ap-guangzhou",
+		TencentClusterID:    "cls-example",
+		TencentSecretID:     "secret-id",
+		TencentSecretKey:    "secret-key",
+		TencentTCRRegistry:  "registry.example.com",
+		TencentTCRNamespace: "opl",
+		TencentTCRRegion:    "ap-guangzhou",
 	})
 
 	readiness := svc.Readiness()

@@ -8,7 +8,7 @@
   "properties": {
     "version": { "const": "fabric-human-gate.v1" },
     "gateId": { "type": "string", "minLength": 1 },
-    "gateKind": { "enum": ["destroy_storage", "delete_backup", "mutate_shared_ingress"] },
+    "gateKind": { "enum": ["destroy_storage", "detach_storage", "mutate_shared_ingress"] },
     "requestedAt": { "type": "string", "format": "date-time" },
     "status": { "enum": ["requested", "approved", "rejected", "changes_requested", "expired"] },
     "resourceRef": { "type": "string", "minLength": 1 },

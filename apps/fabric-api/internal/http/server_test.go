@@ -45,14 +45,14 @@ func TestReadinessEndpoint(t *testing.T) {
 	if readiness.Provider != "tencent-tke" {
 		t.Fatalf("provider = %q, want tencent-tke", readiness.Provider)
 	}
-	if readiness.ResourceCatalog.SchemaVersion != 1 {
-		t.Fatalf("resourceCatalog schemaVersion = %d, want 1", readiness.ResourceCatalog.SchemaVersion)
+	if readiness.ResourceCatalog.SchemaVersion != 2 {
+		t.Fatalf("resourceCatalog schemaVersion = %d, want 2", readiness.ResourceCatalog.SchemaVersion)
 	}
-	if len(readiness.ResourceCatalog.WorkspacePackages) != 3 {
-		t.Fatalf("resourceCatalog workspace package count = %d, want 3", len(readiness.ResourceCatalog.WorkspacePackages))
+	if len(readiness.ResourceCatalog.ProductPresets) != 3 {
+		t.Fatalf("resourceCatalog product preset count = %d, want 3", len(readiness.ResourceCatalog.ProductPresets))
 	}
-	if readiness.ResourceCatalog.WorkspacePackages[0].ID != "basic" {
-		t.Fatalf("resourceCatalog first workspace package ID = %q, want basic", readiness.ResourceCatalog.WorkspacePackages[0].ID)
+	if readiness.ResourceCatalog.ProductPresets[0].ID != "basic" {
+		t.Fatalf("resourceCatalog first product preset ID = %q, want basic", readiness.ResourceCatalog.ProductPresets[0].ID)
 	}
 	if len(readiness.MissingEnv) != 0 {
 		t.Fatalf("missingEnv = %v, want empty", readiness.MissingEnv)
@@ -138,11 +138,11 @@ func TestCatalogEndpoint(t *testing.T) {
 	if got.Owner != cat.Owner {
 		t.Fatalf("owner = %q, want %q", got.Owner, cat.Owner)
 	}
-	if len(got.WorkspacePackages) != len(cat.WorkspacePackages) {
-		t.Fatalf("workspace package count = %d, want %d", len(got.WorkspacePackages), len(cat.WorkspacePackages))
+	if len(got.ProductPresets) != len(cat.ProductPresets) {
+		t.Fatalf("product preset count = %d, want %d", len(got.ProductPresets), len(cat.ProductPresets))
 	}
-	if got.WorkspacePackages[0].ID != "basic" {
-		t.Fatalf("first workspace package ID = %q, want basic", got.WorkspacePackages[0].ID)
+	if got.ProductPresets[0].ID != "basic" {
+		t.Fatalf("first product preset ID = %q, want basic", got.ProductPresets[0].ID)
 	}
 	if got.StorageClasses[0].StorageClassName != "cbs" {
 		t.Fatalf("storage class = %q, want cbs", got.StorageClasses[0].StorageClassName)
@@ -229,5 +229,15 @@ func testServiceConfig() service.Config {
 		KubernetesNamespace: "opl-cloud",
 		IngressClass:        "qcloud",
 		ImagePullSecretName: "tcr-pull-secret",
+		WorkspaceImage:      "ghcr.io/gaofeng21cn/one-person-lab-app:latest",
+		WorkspaceDomain:     "workspace.medopl.cn",
+		StorageClass:        "cbs",
+		TencentTKERegion:    "ap-guangzhou",
+		TencentClusterID:    "cls-example",
+		TencentSecretID:     "secret-id",
+		TencentSecretKey:    "secret-key",
+		TencentTCRRegistry:  "registry.example.com",
+		TencentTCRNamespace: "opl",
+		TencentTCRRegion:    "ap-guangzhou",
 	}
 }
