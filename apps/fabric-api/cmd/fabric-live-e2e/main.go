@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -562,10 +564,81 @@ func waitDeploymentAvailable(ctx context.Context, client kubernetes.Interface, n
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("deployment %s did not become available: %w", name, ctx.Err())
+			return fmt.Errorf("deployment %s did not become available: %w\n%s", name, ctx.Err(), deploymentDiagnostics(ctx, client, namespace, deploy))
 		case <-ticker.C:
 		}
 	}
+}
+
+func deploymentDiagnostics(ctx context.Context, client kubernetes.Interface, namespace string, deploy *appsv1.Deployment) string {
+	lines := []string{
+		fmt.Sprintf("deployment_status name=%s namespace=%s replicas=%d updated=%d ready=%d available=%d observedGeneration=%d generation=%d selector=%s",
+			deploy.Name,
+			deploy.Namespace,
+			deploy.Status.Replicas,
+			deploy.Status.UpdatedReplicas,
+			deploy.Status.ReadyReplicas,
+			deploy.Status.AvailableReplicas,
+			deploy.Status.ObservedGeneration,
+			deploy.Generation,
+			labels.Set(deploy.Spec.Selector.MatchLabels).String(),
+		),
+	}
+	for _, condition := range deploy.Status.Conditions {
+		lines = append(lines, fmt.Sprintf("condition %s=%s reason=%s message=%s", condition.Type, condition.Status, condition.Reason, condition.Message))
+	}
+	pods, err := client.CoreV1().Pods(namespace).List(contextWithoutCancellation(ctx), metav1.ListOptions{LabelSelector: labels.Set(deploy.Spec.Selector.MatchLabels).String()})
+	if err != nil {
+		lines = append(lines, fmt.Sprintf("pod_list_error %v", err))
+		return strings.Join(lines, "\n")
+	}
+	sort.Slice(pods.Items, func(i, j int) bool { return pods.Items[i].Name < pods.Items[j].Name })
+	for _, pod := range pods.Items {
+		lines = append(lines, fmt.Sprintf("pod name=%s phase=%s node=%s reason=%s message=%s", pod.Name, pod.Status.Phase, pod.Spec.NodeName, pod.Status.Reason, pod.Status.Message))
+		for _, condition := range pod.Status.Conditions {
+			if condition.Status != corev1.ConditionTrue {
+				lines = append(lines, fmt.Sprintf("pod_condition pod=%s %s=%s reason=%s message=%s", pod.Name, condition.Type, condition.Status, condition.Reason, condition.Message))
+			}
+		}
+		for _, status := range pod.Status.ContainerStatuses {
+			switch {
+			case status.State.Waiting != nil:
+				lines = append(lines, fmt.Sprintf("container %s waiting=%s message=%s", status.Name, status.State.Waiting.Reason, status.State.Waiting.Message))
+			case status.State.Terminated != nil:
+				lines = append(lines, fmt.Sprintf("container %s terminated=%s exitCode=%d message=%s", status.Name, status.State.Terminated.Reason, status.State.Terminated.ExitCode, status.State.Terminated.Message))
+			default:
+				lines = append(lines, fmt.Sprintf("container %s ready=%t restarts=%d", status.Name, status.Ready, status.RestartCount))
+			}
+		}
+		lines = append(lines, podEvents(ctx, client, namespace, pod.Name)...)
+	}
+	if len(pods.Items) == 0 {
+		lines = append(lines, "pods none")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func podEvents(ctx context.Context, client kubernetes.Interface, namespace, podName string) []string {
+	events, err := client.CoreV1().Events(namespace).List(contextWithoutCancellation(ctx), metav1.ListOptions{})
+	if err != nil {
+		return []string{fmt.Sprintf("event_list_error pod=%s %v", podName, err)}
+	}
+	lines := []string{}
+	for _, event := range events.Items {
+		if event.InvolvedObject.Kind != "Pod" || event.InvolvedObject.Name != podName {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("event %s %s pod/%s: %s", event.Type, event.Reason, podName, event.Message))
+	}
+	sort.Strings(lines)
+	return lines
+}
+
+func contextWithoutCancellation(ctx context.Context) context.Context {
+	if ctx.Err() == nil {
+		return ctx
+	}
+	return context.Background()
 }
 
 func deploymentAvailable(deploy *appsv1.Deployment) bool {

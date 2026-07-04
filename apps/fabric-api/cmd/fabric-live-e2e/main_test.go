@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/config"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -72,5 +74,69 @@ func TestVerifyKubernetesInputsDoesNotCreateNamespaceWithoutBootstrapFlag(t *tes
 	}
 	if _, getErr := client.CoreV1().Namespaces().Get(context.Background(), "oplfabric", metav1.GetOptions{}); !apierrors.IsNotFound(getErr) {
 		t.Fatalf("namespace should not be created, get err=%v", getErr)
+	}
+}
+
+func TestWaitDeploymentAvailableIncludesKubernetesDiagnosticsOnTimeout(t *testing.T) {
+	replicas := int32(1)
+	client := fake.NewSimpleClientset(
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "opl-compute-timeout", Namespace: "oplfabric"},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "workspace"}},
+			},
+			Status: appsv1.DeploymentStatus{
+				Replicas:          1,
+				UpdatedReplicas:   1,
+				ReadyReplicas:     0,
+				AvailableReplicas: 0,
+				Conditions: []appsv1.DeploymentCondition{{
+					Type:    appsv1.DeploymentAvailable,
+					Status:  corev1.ConditionFalse,
+					Reason:  "MinimumReplicasUnavailable",
+					Message: "Deployment does not have minimum availability",
+				}},
+			},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "workspace-pod", Namespace: "oplfabric", Labels: map[string]string{"app": "workspace"}},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				ContainerStatuses: []corev1.ContainerStatus{{
+					Name: "workspace",
+					State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+						Reason:  "ImagePullBackOff",
+						Message: "failed to pull image",
+					}},
+				}},
+			},
+		},
+		&corev1.Event{
+			ObjectMeta:     metav1.ObjectMeta{Name: "workspace-pod.1", Namespace: "oplfabric"},
+			InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "workspace-pod", Namespace: "oplfabric"},
+			Type:           corev1.EventTypeWarning,
+			Reason:         "Failed",
+			Message:        "Failed to pull image",
+		},
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := waitDeploymentAvailable(ctx, client, "oplfabric", "opl-compute-timeout")
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	message := err.Error()
+	for _, want := range []string{
+		"deployment_status name=opl-compute-timeout",
+		"condition Available=False reason=MinimumReplicasUnavailable",
+		"pod name=workspace-pod phase=Pending",
+		"container workspace waiting=ImagePullBackOff",
+		"event Warning Failed pod/workspace-pod: Failed to pull image",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("error missing %q:\n%s", want, message)
+		}
 	}
 }
