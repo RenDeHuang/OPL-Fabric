@@ -142,6 +142,95 @@ func TestCreateWorkspaceEntryPersistsGatewayPath(t *testing.T) {
 	}
 }
 
+func TestCreateWorkspaceEndpointReturnsAcceptedOperation(t *testing.T) {
+	store := &recordingStore{}
+	cfg := testServiceConfig()
+	cfg.Store = store
+	svc := service.New(cfg)
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	body := `{"accountId":"acct-1","requestedBy":"user-1","workspaceName":"Lab","productPresetId":"basic","computeShape":{"cpu":2,"memoryGb":4},"storage":{"sizeGb":20},"isolationMode":"shared_pool"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/fabric/workspaces", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer test-token")
+	req.Header.Set("Idempotency-Key", "idem-workspace-delivery-1")
+	req.Header.Set("X-Correlation-Id", "corr-workspace-delivery-1")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	var receipt struct {
+		OperationID  string `json:"operationId"`
+		State        string `json:"state"`
+		ResourceKind string `json:"resourceKind"`
+		ResourceID   string `json:"resourceId"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&receipt); err != nil {
+		t.Fatalf("decode receipt: %v", err)
+	}
+	if receipt.OperationID == "" || receipt.State != "accepted" || receipt.ResourceKind != "workspace" || receipt.ResourceID == "" {
+		t.Fatalf("receipt mismatch: %+v", receipt)
+	}
+	if len(store.workspaces) != 1 || len(store.storageVolumes) != 1 || len(store.computeResources) != 1 || len(store.storageAttachments) != 1 || len(store.workspaceEntries) != 1 {
+		t.Fatalf("aggregate rows missing: workspaces=%d storage=%d compute=%d attachments=%d entries=%d", len(store.workspaces), len(store.storageVolumes), len(store.computeResources), len(store.storageAttachments), len(store.workspaceEntries))
+	}
+}
+
+func TestWorkspaceEndpointReturnsAggregateStatus(t *testing.T) {
+	store := &recordingStore{}
+	cfg := testServiceConfig()
+	cfg.Store = store
+	svc := service.New(cfg)
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	body := `{"accountId":"acct-1","requestedBy":"user-1","workspaceName":"Lab","productPresetId":"basic","storage":{"sizeGb":20}}`
+	createReq := httptest.NewRequest(http.MethodPost, "/api/fabric/workspaces", strings.NewReader(body))
+	createReq.Header.Set("Authorization", "Bearer test-token")
+	createReq.Header.Set("Idempotency-Key", "idem-workspace-status-1")
+	createReq.Header.Set("X-Correlation-Id", "corr-workspace-status-1")
+	createRec := httptest.NewRecorder()
+	server.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusAccepted {
+		t.Fatalf("create status = %d, body=%s", createRec.Code, createRec.Body.String())
+	}
+	var receipt struct {
+		ResourceID string `json:"resourceId"`
+	}
+	if err := json.NewDecoder(createRec.Body).Decode(&receipt); err != nil {
+		t.Fatalf("decode receipt: %v", err)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/fabric/workspaces/"+receipt.ResourceID, nil)
+	getReq.Header.Set("Authorization", "Bearer test-token")
+	getRec := httptest.NewRecorder()
+	server.ServeHTTP(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get status = %d, want %d, body=%s", getRec.Code, http.StatusOK, getRec.Body.String())
+	}
+	var workspace struct {
+		WorkspaceID string `json:"workspaceId"`
+		State       string `json:"state"`
+		Storage     struct {
+			ID     string `json:"id"`
+			State  string `json:"state"`
+			SizeGB int    `json:"sizeGb"`
+		} `json:"storage"`
+		Entry struct {
+			URL string `json:"url"`
+		} `json:"entry"`
+		OperationID string `json:"operationId"`
+	}
+	if err := json.NewDecoder(getRec.Body).Decode(&workspace); err != nil {
+		t.Fatalf("decode workspace: %v", err)
+	}
+	if workspace.WorkspaceID != receipt.ResourceID || workspace.State != "provisioning" || workspace.Storage.SizeGB != 20 || workspace.Entry.URL == "" || workspace.OperationID == "" {
+		t.Fatalf("workspace mismatch: %+v", workspace)
+	}
+}
+
 func TestReadinessReportsMissingRuntimeConfig(t *testing.T) {
 	svc := service.New(service.Config{Catalog: testCatalog()})
 	server := NewServer(svc, Config{OperatorToken: "test-token"})
@@ -321,8 +410,12 @@ func testServiceConfig() service.Config {
 }
 
 type recordingStore struct {
-	operations       map[string]postgres.OperationRow
-	workspaceEntries map[string]postgres.WorkspaceEntryRow
+	operations         map[string]postgres.OperationRow
+	storageVolumes     map[string]postgres.StorageVolumeRow
+	computeResources   map[string]postgres.ComputeResourceRow
+	storageAttachments map[string]postgres.StorageAttachmentRow
+	workspaceEntries   map[string]postgres.WorkspaceEntryRow
+	workspaces         map[string]postgres.WorkspaceRow
 }
 
 func (s *recordingStore) CreateOperation(_ context.Context, row postgres.OperationRow) error {
@@ -340,15 +433,27 @@ func (s *recordingStore) GetOperation(_ context.Context, id string) (postgres.Op
 	return postgres.OperationRow{}, postgres.ErrStoreNotOpen
 }
 
-func (s *recordingStore) CreateStorageVolume(context.Context, postgres.StorageVolumeRow) error {
+func (s *recordingStore) CreateStorageVolume(_ context.Context, row postgres.StorageVolumeRow) error {
+	if s.storageVolumes == nil {
+		s.storageVolumes = map[string]postgres.StorageVolumeRow{}
+	}
+	s.storageVolumes[row.ID] = row
 	return nil
 }
 
-func (s *recordingStore) CreateComputeResource(context.Context, postgres.ComputeResourceRow) error {
+func (s *recordingStore) CreateComputeResource(_ context.Context, row postgres.ComputeResourceRow) error {
+	if s.computeResources == nil {
+		s.computeResources = map[string]postgres.ComputeResourceRow{}
+	}
+	s.computeResources[row.ID] = row
 	return nil
 }
 
-func (s *recordingStore) CreateStorageAttachment(context.Context, postgres.StorageAttachmentRow) error {
+func (s *recordingStore) CreateStorageAttachment(_ context.Context, row postgres.StorageAttachmentRow) error {
+	if s.storageAttachments == nil {
+		s.storageAttachments = map[string]postgres.StorageAttachmentRow{}
+	}
+	s.storageAttachments[row.ID] = row
 	return nil
 }
 
@@ -358,4 +463,47 @@ func (s *recordingStore) CreateWorkspaceEntry(_ context.Context, row postgres.Wo
 	}
 	s.workspaceEntries[row.ID] = row
 	return nil
+}
+
+func (s *recordingStore) CreateWorkspace(_ context.Context, row postgres.WorkspaceRow) error {
+	if s.workspaces == nil {
+		s.workspaces = map[string]postgres.WorkspaceRow{}
+	}
+	s.workspaces[row.ID] = row
+	return nil
+}
+
+func (s *recordingStore) GetWorkspace(_ context.Context, id string) (postgres.WorkspaceRow, error) {
+	if row, ok := s.workspaces[id]; ok {
+		return row, nil
+	}
+	return postgres.WorkspaceRow{}, postgres.ErrStoreNotOpen
+}
+
+func (s *recordingStore) GetStorageVolume(_ context.Context, id string) (postgres.StorageVolumeRow, error) {
+	if row, ok := s.storageVolumes[id]; ok {
+		return row, nil
+	}
+	return postgres.StorageVolumeRow{}, postgres.ErrStoreNotOpen
+}
+
+func (s *recordingStore) GetComputeResource(_ context.Context, id string) (postgres.ComputeResourceRow, error) {
+	if row, ok := s.computeResources[id]; ok {
+		return row, nil
+	}
+	return postgres.ComputeResourceRow{}, postgres.ErrStoreNotOpen
+}
+
+func (s *recordingStore) GetStorageAttachment(_ context.Context, id string) (postgres.StorageAttachmentRow, error) {
+	if row, ok := s.storageAttachments[id]; ok {
+		return row, nil
+	}
+	return postgres.StorageAttachmentRow{}, postgres.ErrStoreNotOpen
+}
+
+func (s *recordingStore) GetWorkspaceEntry(_ context.Context, id string) (postgres.WorkspaceEntryRow, error) {
+	if row, ok := s.workspaceEntries[id]; ok {
+		return row, nil
+	}
+	return postgres.WorkspaceEntryRow{}, postgres.ErrStoreNotOpen
 }

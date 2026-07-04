@@ -8,6 +8,7 @@ Supported in the first implementation:
 - Go API process.
 - Catalog and readiness endpoints.
 - Mutating reservation endpoints with operation receipts.
+- Console-facing Workspace delivery reservation API and aggregate status API.
 - No-rollout operation orchestrator for accepted operations.
 - Domain safety rules.
 - PostgreSQL schema.
@@ -29,7 +30,8 @@ Remaining risks:
 
 - The OPL Cloud comparison is pinned to `RenDeHuang/OPL-Cloud@126e6bf8b27ef18c2d18df8d846455015e0b3ee0`; newer OPL Cloud commits need a deliberate re-baseline and contract diff.
 - Readiness is still mainly configuration and environment readiness. Live PostgreSQL version checks and live Kubernetes API, storage, ingress, Tencent TKE capacity, node pool template, quota, and cluster capability checks are not complete.
-- Mutating APIs now accept resource reservations and return operation receipts, but they do not yet run the asynchronous orchestrator or mutate Kubernetes/Tencent Cloud resources.
+- Mutating APIs now accept resource reservations and return operation receipts, including `POST /api/fabric/workspaces`, but they do not yet run the asynchronous orchestrator or mutate Kubernetes/Tencent Cloud resources.
+- `GET /api/fabric/workspaces/{id}` returns the reserved storage, compute, attachment, entry, and operation aggregate for Console polling.
 - The orchestrator is implemented as a control-plane component, but it is not yet wired as a background worker in the API process.
 - PostgreSQL coverage includes store method compilation and startup migration wiring, but not a live database migration and constraint test lane.
 - Production console hosting still needs explicit Fabric integration from OPL Cloud/Console. OPL Cloud now carries workspace gateway/proxy behavior in its Console server, while Fabric remains the storage/compute/attachment/entry API boundary.

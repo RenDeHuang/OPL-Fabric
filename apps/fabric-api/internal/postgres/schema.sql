@@ -62,6 +62,21 @@ CREATE TABLE IF NOT EXISTS fabric_operations (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS workspaces (
+  id TEXT PRIMARY KEY,
+  owner_account_id TEXT NOT NULL,
+  workspace_name TEXT NOT NULL,
+  product_preset_id TEXT NOT NULL DEFAULT '',
+  storage_id TEXT NOT NULL REFERENCES storage_volumes(id),
+  compute_id TEXT NOT NULL REFERENCES compute_resources(id),
+  attachment_id TEXT NOT NULL REFERENCES storage_attachments(id),
+  entry_id TEXT NOT NULL REFERENCES workspace_entries(id),
+  operation_id TEXT NOT NULL REFERENCES fabric_operations(id),
+  state TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS fabric_events (
   id TEXT PRIMARY KEY,
   operation_id TEXT NOT NULL REFERENCES fabric_operations(id),

@@ -12,6 +12,7 @@ func TestSchemaContainsRequiredTables(t *testing.T) {
 		"storage_volumes",
 		"storage_attachments",
 		"workspace_entries",
+		"workspaces",
 		"fabric_operations",
 		"fabric_events",
 		"fabric_evidence_refs",
@@ -36,6 +37,9 @@ func TestSchemaContainsPersistenceConstraints(t *testing.T) {
 		"operation_id TEXT NOT NULL REFERENCES fabric_operations(id)",
 		"operation_id TEXT NOT NULL UNIQUE REFERENCES fabric_operations(id)",
 		"idempotency_key TEXT NOT NULL UNIQUE",
+		"storage_id TEXT NOT NULL REFERENCES storage_volumes(id)",
+		"compute_id TEXT NOT NULL REFERENCES compute_resources(id)",
+		"entry_id TEXT NOT NULL REFERENCES workspace_entries(id)",
 		"CHECK (size_gb > 0)",
 		"CHECK (sha256 ~ '^[A-Fa-f0-9]{64}$')",
 	}
@@ -113,5 +117,11 @@ func TestNilStoreResourceMethodsReturnError(t *testing.T) {
 	}
 	if err := store.UpdateWorkspaceEntry(ctx, WorkspaceEntryRow{}); err != ErrStoreNotOpen {
 		t.Fatalf("UpdateWorkspaceEntry error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.CreateWorkspace(ctx, WorkspaceRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("CreateWorkspace error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if _, err := store.GetWorkspace(ctx, "workspace-1"); err != ErrStoreNotOpen {
+		t.Fatalf("GetWorkspace error = %v, want %v", err, ErrStoreNotOpen)
 	}
 }

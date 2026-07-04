@@ -36,6 +36,17 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 	mux.HandleFunc("POST /api/fabric/workspace-entries", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptWorkspaceEntry)
 	})
+	mux.HandleFunc("POST /api/fabric/workspaces", func(w http.ResponseWriter, r *http.Request) {
+		handleMutation(w, r, svc.AcceptWorkspace)
+	})
+	mux.HandleFunc("GET /api/fabric/workspaces/{id}", func(w http.ResponseWriter, r *http.Request) {
+		workspace, err := svc.Workspace(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, workspace)
+	})
 	mux.HandleFunc("POST /api/fabric/compute-resources/{id}/destroy", func(w http.ResponseWriter, r *http.Request) {
 		handleConfirmedMutation(w, r, func(headers service.MutationHeaders, req service.ConfirmRequest) (service.OperationReceipt, error) {
 			return svc.AcceptComputeDestroy(r.Context(), headers, r.PathValue("id"), req)

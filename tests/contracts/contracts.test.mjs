@@ -9,7 +9,8 @@ const contractFiles = [
   "contracts/fabric-lifecycle-ledger.schema.json",
   "contracts/fabric-operation-receipt.schema.json",
   "contracts/fabric-resource-catalog.schema.json",
-  "contracts/fabric-runtime-supervision.schema.json"
+  "contracts/fabric-runtime-supervision.schema.json",
+  "contracts/fabric-workspace.schema.json"
 ];
 
 test("contract files are valid JSON with stable identifiers", () => {
@@ -70,7 +71,9 @@ test("OpenAPI only publishes currently implemented HTTP routes", () => {
     "/api/fabric/storage-attachments/{id}/detach",
     "/api/fabric/storage-volumes",
     "/api/fabric/storage-volumes/{id}/destroy",
-    "/api/fabric/workspace-entries"
+    "/api/fabric/workspace-entries",
+    "/api/fabric/workspaces",
+    "/api/fabric/workspaces/{id}"
   ]);
 });
 

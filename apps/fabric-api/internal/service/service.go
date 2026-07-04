@@ -25,6 +25,12 @@ type Store interface {
 	CreateComputeResource(context.Context, postgres.ComputeResourceRow) error
 	CreateStorageAttachment(context.Context, postgres.StorageAttachmentRow) error
 	CreateWorkspaceEntry(context.Context, postgres.WorkspaceEntryRow) error
+	CreateWorkspace(context.Context, postgres.WorkspaceRow) error
+	GetWorkspace(context.Context, string) (postgres.WorkspaceRow, error)
+	GetStorageVolume(context.Context, string) (postgres.StorageVolumeRow, error)
+	GetComputeResource(context.Context, string) (postgres.ComputeResourceRow, error)
+	GetStorageAttachment(context.Context, string) (postgres.StorageAttachmentRow, error)
+	GetWorkspaceEntry(context.Context, string) (postgres.WorkspaceEntryRow, error)
 }
 
 type Config struct {
@@ -158,6 +164,53 @@ type CreateWorkspaceEntryRequest struct {
 	AttachmentID  string `json:"attachmentId"`
 }
 
+type CreateWorkspaceRequest struct {
+	AccountID            string         `json:"accountId"`
+	RequestedBy          string         `json:"requestedBy"`
+	WorkspaceName        string         `json:"workspaceName"`
+	ProductPresetID      string         `json:"productPresetId"`
+	ComputeShape         map[string]any `json:"computeShape"`
+	ProviderInstanceType string         `json:"providerInstanceType"`
+	CapacityPoolID       string         `json:"capacityPoolId"`
+	IsolationMode        string         `json:"isolationMode"`
+	Storage              struct {
+		SizeGB int `json:"sizeGb"`
+	} `json:"storage"`
+}
+
+type Workspace struct {
+	WorkspaceID string                 `json:"workspaceId"`
+	State       string                 `json:"state"`
+	Storage     WorkspaceStorageStatus `json:"storage"`
+	Compute     WorkspaceComputeStatus `json:"compute"`
+	Attachment  WorkspaceAttachStatus  `json:"attachment"`
+	Entry       WorkspaceEntryStatus   `json:"entry"`
+	OperationID string                 `json:"operationId"`
+}
+
+type WorkspaceStorageStatus struct {
+	ID     string `json:"id"`
+	State  string `json:"state"`
+	SizeGB int    `json:"sizeGb"`
+}
+
+type WorkspaceComputeStatus struct {
+	ID    string `json:"id"`
+	State string `json:"state"`
+}
+
+type WorkspaceAttachStatus struct {
+	ID        string `json:"id"`
+	State     string `json:"state"`
+	MountPath string `json:"mountPath"`
+}
+
+type WorkspaceEntryStatus struct {
+	ID    string `json:"id"`
+	State string `json:"state"`
+	URL   string `json:"url"`
+}
+
 type ConfirmRequest struct {
 	RequestedBy string `json:"requestedBy"`
 	Confirm     bool   `json:"confirm"`
@@ -251,6 +304,54 @@ func (s *Service) AcceptWorkspaceEntry(ctx context.Context, headers MutationHead
 	return s.acceptOperation(ctx, headers, req.RequestedBy, "workspace_entry", resourceID)
 }
 
+func (s *Service) AcceptWorkspace(ctx context.Context, headers MutationHeaders, req CreateWorkspaceRequest) (OperationReceipt, error) {
+	if err := s.requireMutation(req.AccountID, req.RequestedBy); err != nil {
+		return OperationReceipt{}, err
+	}
+	workspaceID := stableID("ws", headers.IdempotencyKey)
+	storageID := stableID("storage", headers.IdempotencyKey)
+	computeID := stableID("compute", headers.IdempotencyKey)
+	attachmentID := stableID("attach", headers.IdempotencyKey)
+	entryID := stableID("entry", headers.IdempotencyKey)
+	operationID := stableID("op", headers.IdempotencyKey)
+	sizeGB := req.Storage.SizeGB
+	if sizeGB <= 0 {
+		sizeGB = 10
+	}
+	productPresetID := defaultString(req.ProductPresetID, "basic")
+	shapeJSON, err := json.Marshal(req.ComputeShape)
+	if err != nil {
+		return OperationReceipt{}, err
+	}
+	if err := s.store.CreateOperation(ctx, postgres.OperationRow{
+		ID:             operationID,
+		CorrelationID:  headers.CorrelationID,
+		IdempotencyKey: headers.IdempotencyKey,
+		RequestedBy:    req.RequestedBy,
+		ResourceID:     workspaceID,
+		ResourceKind:   "workspace",
+		State:          "accepted",
+	}); err != nil {
+		return OperationReceipt{}, err
+	}
+	if err := s.store.CreateStorageVolume(ctx, postgres.StorageVolumeRow{ID: storageID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, State: "creating", SizeGB: sizeGB, Retained: true}); err != nil {
+		return OperationReceipt{}, err
+	}
+	if err := s.store.CreateComputeResource(ctx, postgres.ComputeResourceRow{ID: computeID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, ComputeShapeJSON: string(shapeJSON), ProviderInstanceType: req.ProviderInstanceType, CapacityPoolID: req.CapacityPoolID, IsolationMode: req.IsolationMode, State: "creating"}); err != nil {
+		return OperationReceipt{}, err
+	}
+	if err := s.store.CreateStorageAttachment(ctx, postgres.StorageAttachmentRow{ID: attachmentID, OwnerAccountID: req.AccountID, ComputeID: computeID, StorageID: storageID, State: "attaching", MountPath: "/data"}); err != nil {
+		return OperationReceipt{}, err
+	}
+	if err := s.store.CreateWorkspaceEntry(ctx, postgres.WorkspaceEntryRow{ID: entryID, OwnerAccountID: req.AccountID, WorkspaceID: workspaceID, AttachmentID: attachmentID, State: "creating", Host: s.workspaceDomain, Path: "/w/" + workspaceID + "/"}); err != nil {
+		return OperationReceipt{}, err
+	}
+	if err := s.store.CreateWorkspace(ctx, postgres.WorkspaceRow{ID: workspaceID, OwnerAccountID: req.AccountID, WorkspaceName: req.WorkspaceName, ProductPresetID: productPresetID, StorageID: storageID, ComputeID: computeID, AttachmentID: attachmentID, EntryID: entryID, OperationID: operationID, State: "provisioning"}); err != nil {
+		return OperationReceipt{}, err
+	}
+	return OperationReceipt{OperationID: operationID, State: "accepted", ResourceKind: "workspace", ResourceID: workspaceID}, nil
+}
+
 func (s *Service) AcceptComputeDestroy(ctx context.Context, headers MutationHeaders, resourceID string, req ConfirmRequest) (OperationReceipt, error) {
 	return s.acceptConfirmed(ctx, headers, req, "compute_destroy", resourceID)
 }
@@ -272,6 +373,41 @@ func (s *Service) Operation(ctx context.Context, id string) (OperationReceipt, e
 		return OperationReceipt{}, err
 	}
 	return OperationReceipt{OperationID: row.ID, State: row.State, ResourceKind: row.ResourceKind, ResourceID: row.ResourceID}, nil
+}
+
+func (s *Service) Workspace(ctx context.Context, id string) (Workspace, error) {
+	if s.store == nil {
+		return Workspace{}, ErrStoreRequired
+	}
+	workspace, err := s.store.GetWorkspace(ctx, id)
+	if err != nil {
+		return Workspace{}, err
+	}
+	storage, err := s.store.GetStorageVolume(ctx, workspace.StorageID)
+	if err != nil {
+		return Workspace{}, err
+	}
+	compute, err := s.store.GetComputeResource(ctx, workspace.ComputeID)
+	if err != nil {
+		return Workspace{}, err
+	}
+	attachment, err := s.store.GetStorageAttachment(ctx, workspace.AttachmentID)
+	if err != nil {
+		return Workspace{}, err
+	}
+	entry, err := s.store.GetWorkspaceEntry(ctx, workspace.EntryID)
+	if err != nil {
+		return Workspace{}, err
+	}
+	return Workspace{
+		WorkspaceID: workspace.ID,
+		State:       workspace.State,
+		Storage:     WorkspaceStorageStatus{ID: storage.ID, State: storage.State, SizeGB: storage.SizeGB},
+		Compute:     WorkspaceComputeStatus{ID: compute.ID, State: compute.State},
+		Attachment:  WorkspaceAttachStatus{ID: attachment.ID, State: attachment.State, MountPath: attachment.MountPath},
+		Entry:       WorkspaceEntryStatus{ID: entry.ID, State: entry.State, URL: "https://" + entry.Host + entry.Path},
+		OperationID: workspace.OperationID,
+	}, nil
 }
 
 func (s *Service) acceptConfirmed(ctx context.Context, headers MutationHeaders, req ConfirmRequest, resourceKind, resourceID string) (OperationReceipt, error) {
@@ -319,6 +455,13 @@ func (s *Service) acceptOperation(ctx context.Context, headers MutationHeaders, 
 func stableID(prefix, key string) string {
 	sum := sha256.Sum256([]byte(prefix + ":" + key))
 	return prefix + "-" + hex.EncodeToString(sum[:])[:16]
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func (s *Service) missingEnv() []string {

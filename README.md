@@ -70,6 +70,8 @@ OPL_OPERATOR_TOKEN=dev-operator-token go run ./cmd/fabric-api
 
 Mutating reservation endpoints require `DATABASE_URL`; when it is configured the API opens PostgreSQL and runs the embedded migration before serving.
 
+The first Console-facing delivery endpoint is `POST /api/fabric/workspaces`. It reserves storage, compute, storage attachment, Workspace entry, and a Fabric operation in PostgreSQL, then returns an operation receipt. `GET /api/fabric/workspaces/{id}` returns the aggregate status for Console polling. This is still a no-rollout control-plane path until the worker is connected to live providers.
+
 In a second shell, run the operator console. The Vite dev server proxies `/api` to `http://127.0.0.1:8787` and injects the Bearer token from its server-side `OPL_OPERATOR_TOKEN` environment variable, so the token is not exposed through a browser `VITE_` variable.
 
 ```bash

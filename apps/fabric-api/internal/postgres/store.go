@@ -75,6 +75,19 @@ type WorkspaceEntryRow struct {
 	Path           string
 }
 
+type WorkspaceRow struct {
+	ID              string
+	OwnerAccountID  string
+	WorkspaceName   string
+	ProductPresetID string
+	StorageID       string
+	ComputeID       string
+	AttachmentID    string
+	EntryID         string
+	OperationID     string
+	State           string
+}
+
 func Open(ctx context.Context, databaseURL string) (*Store, error) {
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
@@ -283,6 +296,31 @@ SET state = $2, host = $3, path = $4, updated_at = now()
 WHERE id = $1
 `, row.ID, row.State, row.Host, row.Path)
 	return err
+}
+
+func (s *Store) CreateWorkspace(ctx context.Context, row WorkspaceRow) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	_, err := s.pool.Exec(ctx, `
+INSERT INTO workspaces (id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_id, attachment_id, entry_id, operation_id, state)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (id) DO NOTHING
+`, row.ID, row.OwnerAccountID, row.WorkspaceName, row.ProductPresetID, row.StorageID, row.ComputeID, row.AttachmentID, row.EntryID, row.OperationID, row.State)
+	return err
+}
+
+func (s *Store) GetWorkspace(ctx context.Context, id string) (WorkspaceRow, error) {
+	if s == nil || s.pool == nil {
+		return WorkspaceRow{}, ErrStoreNotOpen
+	}
+	var row WorkspaceRow
+	err := s.pool.QueryRow(ctx, `
+SELECT id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_id, attachment_id, entry_id, operation_id, state
+FROM workspaces
+WHERE id = $1
+`, id).Scan(&row.ID, &row.OwnerAccountID, &row.WorkspaceName, &row.ProductPresetID, &row.StorageID, &row.ComputeID, &row.AttachmentID, &row.EntryID, &row.OperationID, &row.State)
+	return row, err
 }
 
 func defaultJSON(value string) string {

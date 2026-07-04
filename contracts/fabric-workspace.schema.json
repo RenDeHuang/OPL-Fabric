@@ -1,0 +1,52 @@
+{
+  "$id": "https://opl-fabric.local/contracts/fabric-workspace.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fabric Workspace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["workspaceId", "state", "storage", "compute", "attachment", "entry", "operationId"],
+  "properties": {
+    "workspaceId": { "type": "string", "minLength": 1 },
+    "state": { "type": "string", "enum": ["provisioning", "running", "blocked", "failed", "destroyed"] },
+    "operationId": { "type": "string", "minLength": 1 },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "sizeGb"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 },
+        "sizeGb": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "compute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 }
+      }
+    },
+    "attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "mountPath"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 },
+        "mountPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "url"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

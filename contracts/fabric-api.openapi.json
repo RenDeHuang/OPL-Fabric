@@ -227,6 +227,71 @@
           "attachmentId": { "type": "string", "minLength": 1 }
         }
       },
+      "CreateWorkspaceRequest": {
+        "type": "object",
+        "required": ["accountId", "requestedBy", "workspaceName"],
+        "properties": {
+          "accountId": { "type": "string", "minLength": 1 },
+          "requestedBy": { "type": "string", "minLength": 1 },
+          "workspaceName": { "type": "string", "minLength": 1 },
+          "productPresetId": { "type": "string" },
+          "computeShape": { "type": "object", "additionalProperties": true },
+          "providerInstanceType": { "type": "string" },
+          "capacityPoolId": { "type": "string" },
+          "isolationMode": { "type": "string", "enum": ["", "shared_pool", "dedicated_nodepool"] },
+          "storage": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sizeGb": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      },
+      "Workspace": {
+        "type": "object",
+        "required": ["workspaceId", "state", "storage", "compute", "attachment", "entry", "operationId"],
+        "properties": {
+          "workspaceId": { "type": "string", "minLength": 1 },
+          "state": { "type": "string", "enum": ["provisioning", "running", "blocked", "failed", "destroyed"] },
+          "operationId": { "type": "string", "minLength": 1 },
+          "storage": {
+            "type": "object",
+            "required": ["id", "state", "sizeGb"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "state": { "type": "string", "minLength": 1 },
+              "sizeGb": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "compute": {
+            "type": "object",
+            "required": ["id", "state"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "state": { "type": "string", "minLength": 1 }
+            }
+          },
+          "attachment": {
+            "type": "object",
+            "required": ["id", "state", "mountPath"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "state": { "type": "string", "minLength": 1 },
+              "mountPath": { "type": "string", "minLength": 1 }
+            }
+          },
+          "entry": {
+            "type": "object",
+            "required": ["id", "state", "url"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "state": { "type": "string", "minLength": 1 },
+              "url": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      },
       "ConfirmRequest": {
         "type": "object",
         "required": ["requestedBy", "confirm"],
@@ -336,6 +401,38 @@
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateWorkspaceEntryRequest" } } } },
         "responses": {
           "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/workspaces": {
+      "post": {
+        "operationId": "createFabricWorkspace",
+        "summary": "Accept workspace delivery",
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateWorkspaceRequest" } } } },
+        "responses": {
+          "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/workspaces/{id}": {
+      "get": {
+        "operationId": "getFabricWorkspace",
+        "summary": "Get Fabric workspace",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "responses": {
+          "200": { "description": "Fabric workspace", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Workspace" } } } },
           "400": { "description": "Bad request" },
           "401": { "description": "Unauthorized" },
           "503": { "description": "Store unavailable" }
