@@ -15,6 +15,9 @@ Committed files are examples and key manifests only. Do not commit real password
 - `tke/readiness-checks.json`: readiness checks OPL-Fabric should perform before production traffic.
 - `tke/secret-refs.example.json`: Kubernetes Secret and external secret reference names.
 - `sources/medopl-3-baseline.md`: source baseline and migration notes from medopl-3 and the active OPL Cloud baseline.
+- `sources/medopl-3/`: copied medopl-3 example config and deployment contract snapshots.
+- `sources/opl-cloud-126e6bf/`: copied active OPL Cloud contract snapshots.
+- `sources/opl-cloud-126e6bf-production-api-baseline.md`: notes on the active OPL Cloud API/resource baseline.
 
 ## Runtime Loading
 

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS storage_volumes (
 
 CREATE TABLE IF NOT EXISTS storage_attachments (
   id TEXT PRIMARY KEY,
+  owner_account_id TEXT NOT NULL,
   compute_id TEXT NOT NULL REFERENCES compute_resources(id),
   storage_id TEXT NOT NULL REFERENCES storage_volumes(id),
   state TEXT NOT NULL,
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS storage_attachments (
 
 CREATE TABLE IF NOT EXISTS workspace_entries (
   id TEXT PRIMARY KEY,
+  owner_account_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL,
   attachment_id TEXT NOT NULL REFERENCES storage_attachments(id),
   state TEXT NOT NULL,

@@ -10,8 +10,8 @@ Observed commit:
 Active OPL Cloud comparison:
 
 - Repository: `RenDeHuang/OPL-Cloud`
-- Commit: `854b047a28148f84912924856975b8c1f0077448`
-- Commit message: `fix: avoid custom pod cidr node pool setting`
+- Commit: `126e6bf8b27ef18c2d18df8d846455015e0b3ee0`
+- Commit message: `revert: stop tke node pool goal work`
 
 Files read:
 

@@ -30,6 +30,7 @@ func TestSchemaContainsPersistenceConstraints(t *testing.T) {
 		"compute_id TEXT NOT NULL REFERENCES compute_resources(id)",
 		"storage_id TEXT NOT NULL REFERENCES storage_volumes(id)",
 		"attachment_id TEXT NOT NULL REFERENCES storage_attachments(id)",
+		"owner_account_id TEXT NOT NULL",
 		"compute_shape_json JSONB NOT NULL DEFAULT '{}'::jsonb",
 		"retained BOOLEAN NOT NULL DEFAULT true",
 		"operation_id TEXT NOT NULL REFERENCES fabric_operations(id)",
@@ -45,9 +46,45 @@ func TestSchemaContainsPersistenceConstraints(t *testing.T) {
 	}
 }
 
+func TestMigrationSQLBackfillsPhaseTwoColumns(t *testing.T) {
+	required := []string{
+		"ALTER TABLE IF EXISTS storage_attachments",
+		"ALTER TABLE IF EXISTS workspace_entries",
+		"ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT ''",
+	}
+	for _, fragment := range required {
+		if !strings.Contains(migrationSQL, fragment) {
+			t.Fatalf("migration SQL missing fragment %q", fragment)
+		}
+	}
+}
+
 func TestNilStoreMigrateReturnsError(t *testing.T) {
 	var store *Store
 	if err := store.Migrate(context.Background()); err != ErrStoreNotOpen {
 		t.Fatalf("error = %v, want %v", err, ErrStoreNotOpen)
+	}
+}
+
+func TestNilStoreResourceMethodsReturnError(t *testing.T) {
+	var store *Store
+	ctx := context.Background()
+	if err := store.CreateOperation(ctx, OperationRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("CreateOperation error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if _, err := store.GetOperation(ctx, "op-1"); err != ErrStoreNotOpen {
+		t.Fatalf("GetOperation error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.CreateStorageVolume(ctx, StorageVolumeRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("CreateStorageVolume error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.CreateComputeResource(ctx, ComputeResourceRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("CreateComputeResource error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.CreateStorageAttachment(ctx, StorageAttachmentRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("CreateStorageAttachment error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.CreateWorkspaceEntry(ctx, WorkspaceEntryRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("CreateWorkspaceEntry error = %v, want %v", err, ErrStoreNotOpen)
 	}
 }

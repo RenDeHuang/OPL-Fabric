@@ -1,12 +1,15 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/catalog"
+	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/postgres"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/service"
 )
 
@@ -65,6 +68,80 @@ func TestReadinessEndpoint(t *testing.T) {
 	}
 }
 
+func TestCreateStorageVolumeEndpointReturnsAcceptedOperation(t *testing.T) {
+	svc := service.New(testServiceConfig())
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	body := `{"accountId":"acct-1","requestedBy":"user-1","productPresetId":"basic","sizeGb":10}`
+	req := httptest.NewRequest(http.MethodPost, "/api/fabric/storage-volumes", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer test-token")
+	req.Header.Set("Idempotency-Key", "idem-storage-1")
+	req.Header.Set("X-Correlation-Id", "corr-storage-1")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	var receipt struct {
+		OperationID  string `json:"operationId"`
+		State        string `json:"state"`
+		ResourceKind string `json:"resourceKind"`
+		ResourceID   string `json:"resourceId"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&receipt); err != nil {
+		t.Fatalf("decode receipt: %v", err)
+	}
+	if receipt.OperationID == "" || receipt.State != "accepted" || receipt.ResourceKind != "storage_volume" || receipt.ResourceID == "" {
+		t.Fatalf("receipt mismatch: %+v", receipt)
+	}
+}
+
+func TestMutatingEndpointRequiresOperationHeaders(t *testing.T) {
+	svc := service.New(testServiceConfig())
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/fabric/storage-volumes", strings.NewReader(`{"accountId":"acct-1","requestedBy":"user-1","sizeGb":10}`))
+	req.Header.Set("Authorization", "Bearer test-token")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateWorkspaceEntryPersistsGatewayPath(t *testing.T) {
+	store := &recordingStore{}
+	cfg := testServiceConfig()
+	cfg.Store = store
+	svc := service.New(cfg)
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	body := `{"accountId":"acct-1","requestedBy":"user-1","workspaceName":"Lab","attachmentId":"attach-1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/fabric/workspace-entries", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer test-token")
+	req.Header.Set("Idempotency-Key", "idem-workspace-1")
+	req.Header.Set("X-Correlation-Id", "corr-workspace-1")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if len(store.workspaceEntries) != 1 {
+		t.Fatalf("workspace entries = %d, want 1", len(store.workspaceEntries))
+	}
+	for _, entry := range store.workspaceEntries {
+		if !strings.HasPrefix(entry.Path, "/w/") || !strings.HasSuffix(entry.Path, "/") {
+			t.Fatalf("workspace path = %q, want /w/<workspaceId>/", entry.Path)
+		}
+	}
+}
+
 func TestReadinessReportsMissingRuntimeConfig(t *testing.T) {
 	svc := service.New(service.Config{Catalog: testCatalog()})
 	server := NewServer(svc, Config{OperatorToken: "test-token"})
@@ -108,7 +185,7 @@ func TestCatalogEndpoint(t *testing.T) {
 		Catalog:             cat,
 		DatabaseURL:         "postgres://user:pass@db:5432/opl_fabric",
 		OperatorToken:       "test-token",
-		KubernetesNamespace: "opl-cloud",
+		KubernetesNamespace: "opl-fabric",
 		IngressClass:        "qcloud",
 		ImagePullSecretName: "tcr-pull-secret",
 	})
@@ -226,7 +303,7 @@ func testServiceConfig() service.Config {
 		Catalog:             testCatalog(),
 		DatabaseURL:         "postgres://user:pass@db:5432/opl_fabric",
 		OperatorToken:       "test-token",
-		KubernetesNamespace: "opl-cloud",
+		KubernetesNamespace: "opl-fabric",
 		IngressClass:        "qcloud",
 		ImagePullSecretName: "tcr-pull-secret",
 		WorkspaceImage:      "ghcr.io/gaofeng21cn/one-person-lab-app:latest",
@@ -239,5 +316,46 @@ func testServiceConfig() service.Config {
 		TencentTCRRegistry:  "registry.example.com",
 		TencentTCRNamespace: "opl",
 		TencentTCRRegion:    "ap-guangzhou",
+		Store:               &recordingStore{},
 	}
+}
+
+type recordingStore struct {
+	operations       map[string]postgres.OperationRow
+	workspaceEntries map[string]postgres.WorkspaceEntryRow
+}
+
+func (s *recordingStore) CreateOperation(_ context.Context, row postgres.OperationRow) error {
+	if s.operations == nil {
+		s.operations = map[string]postgres.OperationRow{}
+	}
+	s.operations[row.ID] = row
+	return nil
+}
+
+func (s *recordingStore) GetOperation(_ context.Context, id string) (postgres.OperationRow, error) {
+	if row, ok := s.operations[id]; ok {
+		return row, nil
+	}
+	return postgres.OperationRow{}, postgres.ErrStoreNotOpen
+}
+
+func (s *recordingStore) CreateStorageVolume(context.Context, postgres.StorageVolumeRow) error {
+	return nil
+}
+
+func (s *recordingStore) CreateComputeResource(context.Context, postgres.ComputeResourceRow) error {
+	return nil
+}
+
+func (s *recordingStore) CreateStorageAttachment(context.Context, postgres.StorageAttachmentRow) error {
+	return nil
+}
+
+func (s *recordingStore) CreateWorkspaceEntry(_ context.Context, row postgres.WorkspaceEntryRow) error {
+	if s.workspaceEntries == nil {
+		s.workspaceEntries = map[string]postgres.WorkspaceEntryRow{}
+	}
+	s.workspaceEntries[row.ID] = row
+	return nil
 }

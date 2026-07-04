@@ -29,21 +29,26 @@ The active OPL Cloud comparison is:
 
 - Repository: `RenDeHuang/OPL-Cloud`
 - Branch: `main`
-- Commit: `854b047a28148f84912924856975b8c1f0077448`
-- Commit message: `fix: avoid custom pod cidr node pool setting`
-- Commit URL: `https://github.com/RenDeHuang/OPL-Cloud/commit/854b047a28148f84912924856975b8c1f0077448`
+- Commit: `126e6bf8b27ef18c2d18df8d846455015e0b3ee0`
+- Commit date: `2026-07-04T12:45:42+08:00`
+- Commit message: `revert: stop tke node pool goal work`
+- Commit URL: `https://github.com/RenDeHuang/OPL-Cloud/commit/126e6bf8b27ef18c2d18df8d846455015e0b3ee0`
 
 This baseline changes the OPL Fabric direction:
 
 - Storage is the durable resource.
 - Compute is rebuildable capacity.
 - Storage attachment precedes Workspace entry creation.
+- Workspace entry URLs use the gateway path pattern `/w/<workspaceId>/`.
 - TKE NodePool capacity is a cloud capacity concern, not the Kubernetes runtime object itself.
-- The old workspace bundle and copy-based storage lifecycle narrative is not carried forward as a compatibility layer.
+- Retired combined-resource and copy-based lifecycle models are not carried forward as compatibility layers.
+- The latest OPL Cloud NodePool goal work was reverted, so OPL Fabric must not import that JavaScript provider/runtime path as its long-term implementation.
 
 The stable implementation stack is fixed as React + TypeScript frontend, Go backend, PostgreSQL durable store, Kubernetes Go client-go runtime provider, Tencent Cloud Go SDK capacity provider, OpenAPI + JSON Schema contracts, and `config/` with `OPL_FABRIC_CONFIG_DIR` for runtime configuration.
 
 Normal runtime must not depend on `kubectl` shell-out, `tccli` shell-out, or JavaScript provider runtime.
+
+The active staging namespace is `opl-fabric`. Staging is allowed to create and delete real Tencent TKE NodePools through the Tencent Cloud Go SDK once the later NodePool resolver phase is implemented.
 
 ## 2026-07-04: Central Fabric config directory
 

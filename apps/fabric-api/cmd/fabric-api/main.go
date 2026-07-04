@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -8,11 +9,20 @@ import (
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/catalog"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/config"
 	httpapi "github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/http"
+	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/postgres"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/service"
 )
 
 func main() {
 	cfg := config.Load()
+	ctx := context.Background()
+	store, err := openMigratedStore(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if store != nil {
+		defer store.Close()
+	}
 	cat := catalog.DefaultCatalog(catalog.Config{
 		WorkspaceImage:  cfg.WorkspaceImage,
 		WorkspaceDomain: cfg.WorkspaceDomain,
@@ -35,6 +45,7 @@ func main() {
 		TencentTCRRegistry:  cfg.TencentTCRRegistry,
 		TencentTCRNamespace: cfg.TencentTCRNamespace,
 		TencentTCRRegion:    cfg.TencentTCRRegion,
+		Store:               store,
 	})
 	handler := httpapi.NewServer(svc, httpapi.Config{OperatorToken: cfg.OperatorToken})
 
@@ -51,4 +62,19 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func openMigratedStore(ctx context.Context, databaseURL string) (*postgres.Store, error) {
+	if databaseURL == "" {
+		return nil, nil
+	}
+	store, err := postgres.Open(ctx, databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	if err := store.Migrate(ctx); err != nil {
+		store.Close()
+		return nil, err
+	}
+	return store, nil
 }

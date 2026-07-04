@@ -172,6 +172,68 @@
           "pathPattern": { "type": "string", "minLength": 1 },
           "available": { "type": "boolean" }
         }
+      },
+      "OperationReceipt": {
+        "type": "object",
+        "required": ["operationId", "state", "resourceKind", "resourceId"],
+        "properties": {
+          "operationId": { "type": "string", "minLength": 1 },
+          "state": { "type": "string", "enum": ["accepted", "dry_run", "applying", "verifying", "succeeded", "failed", "blocked", "needs_human_gate"] },
+          "resourceKind": { "type": "string", "minLength": 1 },
+          "resourceId": { "type": "string", "minLength": 1 }
+        }
+      },
+      "CreateStorageVolumeRequest": {
+        "type": "object",
+        "required": ["accountId", "requestedBy", "sizeGb"],
+        "properties": {
+          "accountId": { "type": "string", "minLength": 1 },
+          "requestedBy": { "type": "string", "minLength": 1 },
+          "productPresetId": { "type": "string" },
+          "sizeGb": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "CreateComputeResourceRequest": {
+        "type": "object",
+        "required": ["accountId", "requestedBy"],
+        "properties": {
+          "accountId": { "type": "string", "minLength": 1 },
+          "requestedBy": { "type": "string", "minLength": 1 },
+          "productPresetId": { "type": "string" },
+          "computeShape": { "type": "object", "additionalProperties": true },
+          "providerInstanceType": { "type": "string" },
+          "capacityPoolId": { "type": "string" },
+          "isolationMode": { "type": "string", "enum": ["", "shared_pool", "dedicated_nodepool"] }
+        }
+      },
+      "CreateStorageAttachmentRequest": {
+        "type": "object",
+        "required": ["accountId", "requestedBy", "computeId", "storageId"],
+        "properties": {
+          "accountId": { "type": "string", "minLength": 1 },
+          "requestedBy": { "type": "string", "minLength": 1 },
+          "computeId": { "type": "string", "minLength": 1 },
+          "storageId": { "type": "string", "minLength": 1 },
+          "mountPath": { "type": "string" }
+        }
+      },
+      "CreateWorkspaceEntryRequest": {
+        "type": "object",
+        "required": ["accountId", "requestedBy", "workspaceName", "attachmentId"],
+        "properties": {
+          "accountId": { "type": "string", "minLength": 1 },
+          "requestedBy": { "type": "string", "minLength": 1 },
+          "workspaceName": { "type": "string", "minLength": 1 },
+          "attachmentId": { "type": "string", "minLength": 1 }
+        }
+      },
+      "ConfirmRequest": {
+        "type": "object",
+        "required": ["requestedBy", "confirm"],
+        "properties": {
+          "requestedBy": { "type": "string", "minLength": 1 },
+          "confirm": { "type": "boolean", "const": true }
+        }
       }
     }
   },
@@ -209,6 +271,143 @@
           },
           "400": { "description": "Bad request" },
           "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/fabric/storage-volumes": {
+      "post": {
+        "operationId": "createFabricStorageVolume",
+        "summary": "Accept storage volume creation",
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateStorageVolumeRequest" } } } },
+        "responses": {
+          "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/compute-resources": {
+      "post": {
+        "operationId": "createFabricComputeResource",
+        "summary": "Accept compute resource creation",
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateComputeResourceRequest" } } } },
+        "responses": {
+          "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/storage-attachments": {
+      "post": {
+        "operationId": "createFabricStorageAttachment",
+        "summary": "Accept storage attachment creation",
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateStorageAttachmentRequest" } } } },
+        "responses": {
+          "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/workspace-entries": {
+      "post": {
+        "operationId": "createFabricWorkspaceEntry",
+        "summary": "Accept workspace entry creation",
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateWorkspaceEntryRequest" } } } },
+        "responses": {
+          "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/compute-resources/{id}/destroy": {
+      "post": {
+        "operationId": "destroyFabricComputeResource",
+        "summary": "Accept compute destruction",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConfirmRequest" } } } },
+        "responses": {
+          "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/storage-volumes/{id}/destroy": {
+      "post": {
+        "operationId": "destroyFabricStorageVolume",
+        "summary": "Accept storage destruction",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConfirmRequest" } } } },
+        "responses": {
+          "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/storage-attachments/{id}/detach": {
+      "post": {
+        "operationId": "detachFabricStorageAttachment",
+        "summary": "Accept storage attachment detach",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
+          { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConfirmRequest" } } } },
+        "responses": {
+          "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
+        }
+      }
+    },
+    "/api/fabric/operations/{id}": {
+      "get": {
+        "operationId": "getFabricOperation",
+        "summary": "Get Fabric operation",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } }
+        ],
+        "responses": {
+          "200": { "description": "Fabric operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
+          "400": { "description": "Bad request" },
+          "401": { "description": "Unauthorized" },
+          "503": { "description": "Store unavailable" }
         }
       }
     }

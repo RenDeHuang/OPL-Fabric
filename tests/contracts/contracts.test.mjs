@@ -7,6 +7,7 @@ const contractFiles = [
   "contracts/fabric-event-envelope.schema.json",
   "contracts/fabric-human-gate.schema.json",
   "contracts/fabric-lifecycle-ledger.schema.json",
+  "contracts/fabric-operation-receipt.schema.json",
   "contracts/fabric-resource-catalog.schema.json",
   "contracts/fabric-runtime-supervision.schema.json"
 ];
@@ -59,7 +60,18 @@ test("OpenAPI operations expose generator-friendly metadata", () => {
 
 test("OpenAPI only publishes currently implemented HTTP routes", () => {
   const openapi = JSON.parse(readFileSync("contracts/fabric-api.openapi.json", "utf8"));
-  assert.deepEqual(Object.keys(openapi.paths).sort(), ["/api/fabric/catalog", "/api/fabric/readiness"]);
+  assert.deepEqual(Object.keys(openapi.paths).sort(), [
+    "/api/fabric/catalog",
+    "/api/fabric/compute-resources",
+    "/api/fabric/compute-resources/{id}/destroy",
+    "/api/fabric/operations/{id}",
+    "/api/fabric/readiness",
+    "/api/fabric/storage-attachments",
+    "/api/fabric/storage-attachments/{id}/detach",
+    "/api/fabric/storage-volumes",
+    "/api/fabric/storage-volumes/{id}/destroy",
+    "/api/fabric/workspace-entries"
+  ]);
 });
 
 test("OpenAPI success responses declare JSON schemas", () => {
@@ -67,8 +79,27 @@ test("OpenAPI success responses declare JSON schemas", () => {
   for (const [path, pathItem] of Object.entries(openapi.paths)) {
     for (const [method, operation] of Object.entries(pathItem)) {
       const label = `${method.toUpperCase()} ${path}`;
-      const ok = operation.responses?.["200"];
-      assert.ok(ok?.content?.["application/json"]?.schema, `${label} must declare 200 application/json schema`);
+      const ok = Object.entries(operation.responses || {}).find(([status]) => /^2\d\d$/.test(status))?.[1];
+      assert.ok(ok?.content?.["application/json"]?.schema, `${label} must declare 2xx application/json schema`);
+    }
+  }
+});
+
+test("OpenAPI mutating routes require idempotency and correlation headers", () => {
+  const openapi = JSON.parse(readFileSync("contracts/fabric-api.openapi.json", "utf8"));
+  for (const [path, pathItem] of Object.entries(openapi.paths)) {
+    for (const [method, operation] of Object.entries(pathItem)) {
+      if (!["post", "delete", "patch", "put"].includes(method)) continue;
+      const parameters = operation.parameters || [];
+      assert.ok(
+        parameters.some((parameter) => parameter.in === "header" && parameter.name === "Idempotency-Key" && parameter.required === true),
+        `${method.toUpperCase()} ${path} must require Idempotency-Key`
+      );
+      assert.ok(
+        parameters.some((parameter) => parameter.in === "header" && parameter.name === "X-Correlation-Id" && parameter.required === true),
+        `${method.toUpperCase()} ${path} must require X-Correlation-Id`
+      );
+      assert.equal(operation.responses?.["202"]?.content?.["application/json"]?.schema?.$ref, "#/components/schemas/OperationReceipt");
     }
   }
 });

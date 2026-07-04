@@ -94,6 +94,8 @@ spec:
               value: ap-guangzhou
             - name: OPL_TKE_INSTANCE_CHARGE_TYPE
               value: POSTPAID_BY_HOUR
+            - name: OPL_TKE_ALLOW_NODEPOOL_MUTATION
+              value: "true"
             - name: OPL_CODEX_MODEL
               value: gpt-5.5
             - name: OPL_CODEX_REASONING_EFFORT

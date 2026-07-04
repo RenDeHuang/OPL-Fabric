@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opl.fabric/contracts/fabric-operation-receipt.schema.json",
+  "title": "OPL Fabric Operation Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operationId", "state", "resourceKind", "resourceId"],
+  "properties": {
+    "operationId": { "type": "string", "minLength": 1 },
+    "state": { "enum": ["accepted", "dry_run", "applying", "verifying", "succeeded", "failed", "blocked", "needs_human_gate"] },
+    "resourceKind": {
+      "enum": [
+        "storage_volume",
+        "compute_resource",
+        "storage_attachment",
+        "workspace_entry",
+        "compute_destroy",
+        "storage_destroy",
+        "attachment_detach"
+      ]
+    },
+    "resourceId": { "type": "string", "minLength": 1 }
+  }
+}

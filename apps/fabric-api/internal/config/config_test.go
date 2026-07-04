@@ -67,7 +67,13 @@ func TestLoadUsesProductionCompatibleDefaults(t *testing.T) {
 	if cfg.CodexHome != "/data/codex" {
 		t.Fatalf("CodexHome = %q", cfg.CodexHome)
 	}
+	if cfg.KubernetesNamespace != "opl-fabric" {
+		t.Fatalf("KubernetesNamespace = %q", cfg.KubernetesNamespace)
+	}
 	if cfg.TKEInstanceChargeType != "POSTPAID_BY_HOUR" {
 		t.Fatalf("TKEInstanceChargeType = %q", cfg.TKEInstanceChargeType)
+	}
+	if cfg.TKEAllowNodePoolMutation != "true" {
+		t.Fatalf("TKEAllowNodePoolMutation = %q", cfg.TKEAllowNodePoolMutation)
 	}
 }

@@ -30,6 +30,7 @@
     { "name": "OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON", "owner": "tencent-nodepool", "required": false, "secret": false },
     { "name": "OPL_TKE_INSTANCE_CHARGE_TYPE", "owner": "tencent-nodepool", "required": false, "secret": false, "default": "POSTPAID_BY_HOUR" },
     { "name": "OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER", "owner": "tencent-nodepool", "required": false, "secret": false },
+    { "name": "OPL_TKE_ALLOW_NODEPOOL_MUTATION", "owner": "tencent-nodepool", "required": false, "secret": false, "default": "true" },
     { "name": "OPL_TLS_CERT_ID", "owner": "tke-provider", "required": false, "secret": true },
     { "name": "OPL_WORKSPACE_TLS_SECRET_NAME", "owner": "tke-provider", "required": false, "secret": false },
     { "name": "OPL_WORKSPACE_TLS_CERT_ID", "owner": "tke-provider", "required": false, "secret": true },

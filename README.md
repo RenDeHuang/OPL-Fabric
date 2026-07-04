@@ -11,7 +11,7 @@ The product model is storage-first:
 - Storage is the durable user asset.
 - Compute is rebuildable execution capacity.
 - Storage can be detached from one compute resource and reattached to another.
-- A Workspace entry is derived from an attached storage volume, not from a bundled workspace package.
+- A Workspace entry is derived from an attached storage volume, not from a precombined resource SKU.
 
 ## Stack
 
@@ -68,6 +68,8 @@ cd apps/fabric-api
 OPL_OPERATOR_TOKEN=dev-operator-token go run ./cmd/fabric-api
 ```
 
+Mutating reservation endpoints require `DATABASE_URL`; when it is configured the API opens PostgreSQL and runs the embedded migration before serving.
+
 In a second shell, run the operator console. The Vite dev server proxies `/api` to `http://127.0.0.1:8787` and injects the Bearer token from its server-side `OPL_OPERATOR_TOKEN` environment variable, so the token is not exposed through a browser `VITE_` variable.
 
 ```bash
@@ -84,6 +86,7 @@ OPL_OPERATOR_TOKEN=dev-operator-token npm --prefix apps/fabric-console run dev
 - `OPL_K8S_NAMESPACE` populated from the pod metadata namespace.
 - Workspace defaults matching backend config: `OPL_WORKSPACE_IMAGE`, `OPL_WORKSPACE_DOMAIN`, and `OPL_WORKSPACE_STORAGE_CLASS`.
 - Tencent capacity defaults are placeholders only: `TENCENT_TKE_REGION`, `TENCENT_DEPLOY_CLUSTER_ID`, TCR refs, and hourly node pool charge type. Real mutation credentials must come from Secret keys.
+- Staging NodePool mutation is explicitly allowed by `OPL_TKE_ALLOW_NODEPOOL_MUTATION=true`, but only the Tencent Cloud Go SDK resolver phase may use it.
 
 The manifest expects this placeholder Secret in the same namespace:
 

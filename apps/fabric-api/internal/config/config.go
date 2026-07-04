@@ -29,6 +29,7 @@ type Config struct {
 	TKENodePoolLaunchJSON       string
 	TKEInstanceChargeType       string
 	TKENodePoolDesiredPodNumber string
+	TKEAllowNodePoolMutation    string
 	OperatorToken               string
 	CodexModel                  string
 	CodexReasoningEffort        string
@@ -52,7 +53,7 @@ func Load() Config {
 		StorageClass:                env("OPL_WORKSPACE_STORAGE_CLASS", "cbs"),
 		WorkspaceNodeSelectorKey:    os.Getenv("OPL_WORKSPACE_NODE_SELECTOR_KEY"),
 		WorkspaceNodeSelectorValue:  os.Getenv("OPL_WORKSPACE_NODE_SELECTOR_VALUE"),
-		KubernetesNamespace:         env("OPL_K8S_NAMESPACE", "opl-cloud"),
+		KubernetesNamespace:         env("OPL_K8S_NAMESPACE", "opl-fabric"),
 		IngressClass:                os.Getenv("OPL_INGRESS_CLASS"),
 		ImagePullSecretName:         os.Getenv("OPL_IMAGE_PULL_SECRET_NAME"),
 		TencentTKERegion:            os.Getenv("TENCENT_TKE_REGION"),
@@ -67,6 +68,7 @@ func Load() Config {
 		TKENodePoolLaunchJSON:       os.Getenv("OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON"),
 		TKEInstanceChargeType:       env("OPL_TKE_INSTANCE_CHARGE_TYPE", "POSTPAID_BY_HOUR"),
 		TKENodePoolDesiredPodNumber: os.Getenv("OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER"),
+		TKEAllowNodePoolMutation:    env("OPL_TKE_ALLOW_NODEPOOL_MUTATION", "true"),
 		OperatorToken:               os.Getenv("OPL_OPERATOR_TOKEN"),
 		CodexModel:                  env("OPL_CODEX_MODEL", "gpt-5.5"),
 		CodexReasoningEffort:        env("OPL_CODEX_REASONING_EFFORT", "xhigh"),

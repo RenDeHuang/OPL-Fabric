@@ -12,11 +12,11 @@
     "OPL_WORKSPACE_STORAGE_CLASS": { "value": "cbs" },
     "OPL_WORKSPACE_NODE_SELECTOR_KEY": { "value": "medopl.cn/workload" },
     "OPL_WORKSPACE_NODE_SELECTOR_VALUE": { "value": "medopl" },
-    "OPL_K8S_NAMESPACE": { "value": "opl-cloud" },
+    "OPL_K8S_NAMESPACE": { "value": "opl-fabric" },
     "OPL_INGRESS_CLASS": { "value": "qcloud" },
     "OPL_IMAGE_PULL_SECRET_NAME": { "value": "tcr-pull-secret" },
     "OPL_TLS_CERT_ID": { "secretRef": "opl-fabric/tls-cert-id" },
-    "OPL_WORKSPACE_TLS_SECRET_NAME": { "value": "opl-cloud-workspace-medopl-cn-tls" },
+    "OPL_WORKSPACE_TLS_SECRET_NAME": { "value": "opl-fabric-workspace-medopl-cn-tls" },
     "OPL_WORKSPACE_TLS_CERT_ID": { "secretRef": "opl-fabric/workspace-tls-cert-id" },
     "OPL_CODEX_MODEL": { "value": "gpt-5.5" },
     "OPL_CODEX_REASONING_EFFORT": { "value": "xhigh" },
@@ -36,6 +36,7 @@
     "OPL_TKE_NODEPOOL_AUTOSCALING_GROUP_PARA_JSON": { "value": "" },
     "OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON": { "value": "" },
     "OPL_TKE_INSTANCE_CHARGE_TYPE": { "value": "POSTPAID_BY_HOUR" },
-    "OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER": { "value": "" }
+    "OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER": { "value": "" },
+    "OPL_TKE_ALLOW_NODEPOOL_MUTATION": { "value": "true" }
   }
 }

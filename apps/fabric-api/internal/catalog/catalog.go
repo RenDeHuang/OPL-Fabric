@@ -141,6 +141,6 @@ func DefaultCatalog(cfg Config) Catalog {
 		},
 		StorageClasses:  []StorageClass{{ID: "workspace-cbs", Provider: "tencent-tke", StorageClassName: cfg.StorageClass, AccessMode: "ReadWriteOnce", Available: true}},
 		WorkspaceImages: []WorkspaceImage{{ID: "one-person-lab-app", Image: cfg.WorkspaceImage, Port: 3000, PersistentMounts: []string{"/data", "/projects"}, Available: true}},
-		IngressDomains:  []IngressDomain{{ID: "workspace", Host: cfg.WorkspaceDomain, PathPattern: "/w/<workspaceId>", Available: true}},
+		IngressDomains:  []IngressDomain{{ID: "workspace", Host: cfg.WorkspaceDomain, PathPattern: "/w/<workspaceId>/", Available: true}},
 	}
 }

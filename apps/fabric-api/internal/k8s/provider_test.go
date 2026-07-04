@@ -18,7 +18,7 @@ import (
 
 func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace-image:latest"}
 
 	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
 		ID:              "compute-1",
@@ -38,7 +38,7 @@ func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 	}
 	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
 
-	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	deploy, err := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("deployment missing: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 		t.Fatalf("selector missing label-safe compute key")
 	}
 
-	service, err := client.CoreV1().Services("opl-cloud").Get(context.Background(), strings.TrimPrefix(result.ServiceRef, "service/"), metav1.GetOptions{})
+	service, err := client.CoreV1().Services("opl-fabric").Get(context.Background(), strings.TrimPrefix(result.ServiceRef, "service/"), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("service missing: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 
 func TestCreateComputeUsesBoundedDNSNameAndSafeLabels(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace-image:latest"}
 	longID := "Compute_" + strings.Repeat("ABC123_", 20)
 
 	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
@@ -101,7 +101,7 @@ func TestCreateComputeUsesBoundedDNSNameAndSafeLabels(t *testing.T) {
 		t.Fatalf("name is not a DNS-1123 label: %v", errs)
 	}
 
-	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	deploy, err := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("deployment missing: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestCreateComputeCleansDeploymentWhenServiceCreateFails(t *testing.T) {
 	client.PrependReactor("create", "services", func(action testingclient.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("service_create_failed")
 	})
-	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace-image:latest"}
 
 	_, err := provider.CreateCompute(context.Background(), CreateComputeInput{
 		ID:              "compute-1",
@@ -134,7 +134,7 @@ func TestCreateComputeCleansDeploymentWhenServiceCreateFails(t *testing.T) {
 		t.Fatal("expected service create failure")
 	}
 	name := strings.TrimPrefix(k8sName("compute-1"), "deployment/")
-	_, getErr := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	_, getErr := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), name, metav1.GetOptions{})
 	if getErr == nil {
 		t.Fatal("deployment should be cleaned up after service failure")
 	}
@@ -150,7 +150,7 @@ func TestCreateComputeReportsCleanupFailure(t *testing.T) {
 	client.PrependReactor("delete", "deployments", func(action testingclient.Action) (bool, runtime.Object, error) {
 		return true, nil, deleteErr
 	})
-	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace-image:latest"}
 
 	_, err := provider.CreateCompute(context.Background(), CreateComputeInput{
 		ID:              "compute-1",
@@ -167,7 +167,7 @@ func TestCreateComputeReportsCleanupFailure(t *testing.T) {
 
 func TestCreateComputeCarriesCapacityBoundaryMetadata(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	provider := Provider{Client: client, Namespace: "opl-cloud", WorkspaceImage: "workspace-image:latest"}
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace-image:latest"}
 
 	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
 		ID:                   "compute-capacity",
@@ -185,7 +185,7 @@ func TestCreateComputeCarriesCapacityBoundaryMetadata(t *testing.T) {
 	}
 
 	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
-	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	deploy, err := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("deployment missing: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestCreateComputeInjectsWorkspaceRuntimeConfig(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	provider := Provider{
 		Client:               client,
-		Namespace:            "opl-cloud",
+		Namespace:            "opl-fabric",
 		WorkspaceImage:       "workspace:latest",
 		WorkspaceWebUIPort:   3000,
 		WorkspaceDataDir:     "/data",
@@ -235,7 +235,7 @@ func TestCreateComputeInjectsWorkspaceRuntimeConfig(t *testing.T) {
 	}
 
 	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
-	deploy, err := client.AppsV1().Deployments("opl-cloud").Get(context.Background(), name, metav1.GetOptions{})
+	deploy, err := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("deployment missing: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestCreateComputeAddsCodexSecretEnvWhenConfigured(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	provider := Provider{
 		Client:               client,
-		Namespace:            "opl-cloud",
+		Namespace:            "opl-fabric",
 		WorkspaceImage:       "workspace:latest",
 		WorkspaceWebUIPort:   3000,
 		WorkspaceDataDir:     "/data",
@@ -280,7 +280,7 @@ func TestCreateComputeAddsCodexSecretEnvWhenConfigured(t *testing.T) {
 	}
 
 	name := strings.TrimPrefix(result.ProviderRef, "deployment/")
-	secret, err := client.CoreV1().Secrets("opl-cloud").Get(context.Background(), name+"-env", metav1.GetOptions{})
+	secret, err := client.CoreV1().Secrets("opl-fabric").Get(context.Background(), name+"-env", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("secret missing: %v", err)
 	}
