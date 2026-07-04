@@ -225,6 +225,9 @@ func (p Provider) CreateStorageVolume(ctx context.Context, input CreateStorageVo
 		},
 	}
 	if _, err := p.Client.CoreV1().PersistentVolumeClaims(p.Namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return CreateStorageVolumeResult{ProviderRef: "pvc/" + name}, nil
+		}
 		return CreateStorageVolumeResult{}, err
 	}
 	return CreateStorageVolumeResult{ProviderRef: "pvc/" + name}, nil

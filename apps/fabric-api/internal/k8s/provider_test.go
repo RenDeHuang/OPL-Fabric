@@ -318,6 +318,23 @@ func TestCreateStorageVolumeCreatesPVC(t *testing.T) {
 	}
 }
 
+func TestCreateStorageVolumeTreatsExistingPVCAsSuccess(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-fabric", StorageClassName: "cbs"}
+
+	first, err := provider.CreateStorageVolume(context.Background(), CreateStorageVolumeInput{ID: "storage-1", SizeGB: 20})
+	if err != nil {
+		t.Fatalf("first CreateStorageVolume: %v", err)
+	}
+	second, err := provider.CreateStorageVolume(context.Background(), CreateStorageVolumeInput{ID: "storage-1", SizeGB: 20})
+	if err != nil {
+		t.Fatalf("second CreateStorageVolume: %v", err)
+	}
+	if second.ProviderRef != first.ProviderRef {
+		t.Fatalf("ProviderRef = %q, want %q", second.ProviderRef, first.ProviderRef)
+	}
+}
+
 func TestAttachStoragePatchesDeploymentVolumeMount(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace:latest"}
