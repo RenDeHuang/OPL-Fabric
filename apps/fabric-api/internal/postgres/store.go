@@ -155,10 +155,10 @@ func (s *Store) GetOperation(ctx context.Context, id string) (OperationRow, erro
 	}
 	var row OperationRow
 	err := s.pool.QueryRow(ctx, `
-SELECT id, correlation_id, idempotency_key, requested_by, resource_id, resource_kind, state
+SELECT id, correlation_id, idempotency_key, requested_by, resource_id, resource_kind, state, lease_owner, attempts, last_error
 FROM fabric_operations
 WHERE id = $1
-`, id).Scan(&row.ID, &row.CorrelationID, &row.IdempotencyKey, &row.RequestedBy, &row.ResourceID, &row.ResourceKind, &row.State)
+`, id).Scan(&row.ID, &row.CorrelationID, &row.IdempotencyKey, &row.RequestedBy, &row.ResourceID, &row.ResourceKind, &row.State, &row.LeaseOwner, &row.Attempts, &row.LastError)
 	return row, err
 }
 

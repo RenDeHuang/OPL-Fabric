@@ -471,7 +471,7 @@ func waitOperation(ctx context.Context, store *postgres.Store, w worker.Worker, 
 		case "succeeded":
 			return nil
 		case "failed":
-			return fmt.Errorf("operation %s failed", operationID)
+			return fmt.Errorf("operation %s failed after %d attempts: %s", operationID, op.Attempts, op.LastError)
 		}
 		select {
 		case <-ctx.Done():
