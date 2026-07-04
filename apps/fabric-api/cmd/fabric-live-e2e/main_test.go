@@ -85,6 +85,9 @@ func TestWaitDeploymentAvailableIncludesKubernetesDiagnosticsOnTimeout(t *testin
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicas,
 				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "workspace"}},
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{NodeSelector: map[string]string{"oplfabric.cn/compute-id": "compute-timeout"}},
+				},
 			},
 			Status: appsv1.DeploymentStatus{
 				Replicas:          1,
@@ -119,6 +122,9 @@ func TestWaitDeploymentAvailableIncludesKubernetesDiagnosticsOnTimeout(t *testin
 			Reason:         "Failed",
 			Message:        "Failed to pull image",
 		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node-a", Labels: map[string]string{"oplfabric.cn/compute-id": "other-compute", "topology.kubernetes.io/zone": "zone-a"}},
+		},
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -131,9 +137,11 @@ func TestWaitDeploymentAvailableIncludesKubernetesDiagnosticsOnTimeout(t *testin
 	for _, want := range []string{
 		"deployment_status name=opl-compute-timeout",
 		"condition Available=False reason=MinimumReplicasUnavailable",
+		"pod_node_selector oplfabric.cn/compute-id=compute-timeout",
 		"pod name=workspace-pod phase=Pending",
 		"container workspace waiting=ImagePullBackOff",
 		"event Warning Failed pod/workspace-pod: Failed to pull image",
+		"node name=node-a matchesSelector=false labels=oplfabric.cn/compute-id=other-compute,topology.kubernetes.io/zone=zone-a",
 	} {
 		if !strings.Contains(message, want) {
 			t.Fatalf("error missing %q:\n%s", want, message)

@@ -583,6 +583,7 @@ func deploymentDiagnostics(ctx context.Context, client kubernetes.Interface, nam
 			deploy.Generation,
 			labels.Set(deploy.Spec.Selector.MatchLabels).String(),
 		),
+		fmt.Sprintf("pod_node_selector %s", labels.Set(deploy.Spec.Template.Spec.NodeSelector).String()),
 	}
 	for _, condition := range deploy.Status.Conditions {
 		lines = append(lines, fmt.Sprintf("condition %s=%s reason=%s message=%s", condition.Type, condition.Status, condition.Reason, condition.Message))
@@ -615,6 +616,7 @@ func deploymentDiagnostics(ctx context.Context, client kubernetes.Interface, nam
 	if len(pods.Items) == 0 {
 		lines = append(lines, "pods none")
 	}
+	lines = append(lines, nodeDiagnostics(ctx, client, deploy.Spec.Template.Spec.NodeSelector)...)
 	return strings.Join(lines, "\n")
 }
 
@@ -639,6 +641,31 @@ func contextWithoutCancellation(ctx context.Context) context.Context {
 		return ctx
 	}
 	return context.Background()
+}
+
+func nodeDiagnostics(ctx context.Context, client kubernetes.Interface, selector map[string]string) []string {
+	nodes, err := client.CoreV1().Nodes().List(contextWithoutCancellation(ctx), metav1.ListOptions{})
+	if err != nil {
+		return []string{fmt.Sprintf("node_list_error %v", err)}
+	}
+	sort.Slice(nodes.Items, func(i, j int) bool { return nodes.Items[i].Name < nodes.Items[j].Name })
+	if len(nodes.Items) == 0 {
+		return []string{"nodes none"}
+	}
+	lines := []string{}
+	for _, node := range nodes.Items {
+		lines = append(lines, fmt.Sprintf("node name=%s matchesSelector=%t labels=%s", node.Name, nodeMatchesSelector(node.Labels, selector), labels.Set(node.Labels).String()))
+	}
+	return lines
+}
+
+func nodeMatchesSelector(nodeLabels, selector map[string]string) bool {
+	for key, want := range selector {
+		if nodeLabels[key] != want {
+			return false
+		}
+	}
+	return true
 }
 
 func deploymentAvailable(deploy *appsv1.Deployment) bool {
