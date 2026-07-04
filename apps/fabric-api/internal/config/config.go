@@ -61,7 +61,7 @@ func Load() Config {
 		StorageClass:                env("OPL_WORKSPACE_STORAGE_CLASS", "cbs"),
 		WorkspaceNodeSelectorKey:    os.Getenv("OPL_WORKSPACE_NODE_SELECTOR_KEY"),
 		WorkspaceNodeSelectorValue:  os.Getenv("OPL_WORKSPACE_NODE_SELECTOR_VALUE"),
-		KubernetesNamespace:         env("OPL_K8S_NAMESPACE", "opl-fabric"),
+		KubernetesNamespace:         env("OPL_K8S_NAMESPACE", "oplfabric"),
 		IngressClass:                os.Getenv("OPL_INGRESS_CLASS"),
 		ImagePullSecretName:         os.Getenv("OPL_IMAGE_PULL_SECRET_NAME"),
 		TencentTKERegion:            os.Getenv("TENCENT_TKE_REGION"),

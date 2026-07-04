@@ -5,7 +5,7 @@ import "testing"
 func TestGateBlocksWhenRequiredCloudInputsAreMissing(t *testing.T) {
 	result := EvaluateGate(Config{
 		DatabaseURL: "postgres://example",
-		Namespace:   "opl-fabric",
+		Namespace:   "oplfabric",
 	})
 
 	if result.Ready {
@@ -111,7 +111,7 @@ func completeConfig() Config {
 		DatabaseURL:                "postgres://example",
 		OperatorToken:              "token",
 		KubeconfigRef:              "secret/kubeconfig",
-		Namespace:                  "opl-fabric",
+		Namespace:                  "oplfabric",
 		StorageClass:               "cbs",
 		IngressClass:               "qcloud",
 		WorkspaceDomain:            "workspace.medopl.cn",

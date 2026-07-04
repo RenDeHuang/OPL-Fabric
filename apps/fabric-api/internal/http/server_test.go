@@ -358,7 +358,7 @@ func TestCatalogEndpoint(t *testing.T) {
 		Catalog:             cat,
 		DatabaseURL:         "postgres://user:pass@db:5432/opl_fabric",
 		OperatorToken:       "test-token",
-		KubernetesNamespace: "opl-fabric",
+		KubernetesNamespace: "oplfabric",
 		IngressClass:        "qcloud",
 		ImagePullSecretName: "tcr-pull-secret",
 	})
@@ -476,7 +476,7 @@ func testServiceConfig() service.Config {
 		Catalog:                    testCatalog(),
 		DatabaseURL:                "postgres://user:pass@db:5432/opl_fabric",
 		OperatorToken:              "test-token",
-		KubernetesNamespace:        "opl-fabric",
+		KubernetesNamespace:        "oplfabric",
 		IngressClass:               "qcloud",
 		ImagePullSecretName:        "tcr-pull-secret",
 		WorkspaceImage:             "ghcr.io/gaofeng21cn/one-person-lab-app:latest",

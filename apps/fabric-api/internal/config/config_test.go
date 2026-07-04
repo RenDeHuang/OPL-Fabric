@@ -84,7 +84,7 @@ func TestLoadUsesProductionCompatibleDefaults(t *testing.T) {
 	if cfg.CodexHome != "/data/codex" {
 		t.Fatalf("CodexHome = %q", cfg.CodexHome)
 	}
-	if cfg.KubernetesNamespace != "opl-fabric" {
+	if cfg.KubernetesNamespace != "oplfabric" {
 		t.Fatalf("KubernetesNamespace = %q", cfg.KubernetesNamespace)
 	}
 	if cfg.TKEInstanceChargeType != "POSTPAID_BY_HOUR" {

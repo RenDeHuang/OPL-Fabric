@@ -35,7 +35,7 @@ func TestReadinessAllowsOptionalCodexSecret(t *testing.T) {
 		Catalog:                    catalog.DefaultCatalog(catalog.Config{}),
 		DatabaseURL:                "postgres://example",
 		OperatorToken:              "operator",
-		KubernetesNamespace:        "opl-fabric",
+		KubernetesNamespace:        "oplfabric",
 		IngressClass:               "qcloud",
 		ImagePullSecretName:        "tcr-pull-secret",
 		WorkspaceImage:             "workspace:latest",

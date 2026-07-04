@@ -12,7 +12,7 @@
     "OPL_WORKSPACE_STORAGE_CLASS": { "value": "cbs" },
     "OPL_WORKSPACE_NODE_SELECTOR_KEY": { "value": "medopl.cn/workload" },
     "OPL_WORKSPACE_NODE_SELECTOR_VALUE": { "value": "medopl" },
-    "OPL_K8S_NAMESPACE": { "value": "opl-fabric" },
+    "OPL_K8S_NAMESPACE": { "value": "oplfabric" },
     "OPL_INGRESS_CLASS": { "value": "qcloud" },
     "OPL_IMAGE_PULL_SECRET_NAME": { "value": "tcr-pull-secret" },
     "OPL_TLS_CERT_ID": { "secretRef": "opl-fabric/tls-cert-id" },

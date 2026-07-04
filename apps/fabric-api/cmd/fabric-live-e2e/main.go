@@ -23,6 +23,8 @@ import (
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/worker"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -240,6 +242,11 @@ func run(ctx context.Context) error {
 }
 
 func verifyKubernetesInputs(ctx context.Context, client kubernetes.Interface, cfg config.Config) error {
+	if boolEnv("OPL_LIVE_E2E_BOOTSTRAP_NAMESPACE") {
+		if err := bootstrapKubernetesNamespace(ctx, client, cfg); err != nil {
+			return err
+		}
+	}
 	if _, err := client.CoreV1().Namespaces().Get(ctx, cfg.KubernetesNamespace, metav1.GetOptions{}); err != nil {
 		return fmt.Errorf("namespace %q: %w", cfg.KubernetesNamespace, err)
 	}
@@ -253,6 +260,161 @@ func verifyKubernetesInputs(ctx context.Context, client kubernetes.Interface, cf
 		return fmt.Errorf("image pull secret %q: %w", cfg.ImagePullSecretName, err)
 	}
 	return nil
+}
+
+func bootstrapKubernetesNamespace(ctx context.Context, client kubernetes.Interface, cfg config.Config) error {
+	if cfg.KubernetesNamespace == "" {
+		return errors.New("kubernetes namespace is required")
+	}
+	if _, err := client.CoreV1().Namespaces().Get(ctx, cfg.KubernetesNamespace, metav1.GetOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("namespace %q: %w", cfg.KubernetesNamespace, err)
+		}
+		log.Printf("creating namespace %q", cfg.KubernetesNamespace)
+		if _, err := client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: cfg.KubernetesNamespace,
+				Labels: map[string]string{
+					"app.kubernetes.io/part-of": "opl-fabric",
+				},
+			},
+		}, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("create namespace %q: %w", cfg.KubernetesNamespace, err)
+		}
+	}
+	if err := ensureFabricServiceAccount(ctx, client, cfg.KubernetesNamespace); err != nil {
+		return err
+	}
+	if err := ensureFabricRole(ctx, client, cfg.KubernetesNamespace); err != nil {
+		return err
+	}
+	if err := ensureFabricRoleBinding(ctx, client, cfg.KubernetesNamespace); err != nil {
+		return err
+	}
+	if boolEnv("OPL_LIVE_E2E_BOOTSTRAP_IMAGE_PULL_SECRET") {
+		if err := ensureImagePullSecret(ctx, client, cfg.KubernetesNamespace, cfg.ImagePullSecretName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureFabricServiceAccount(ctx context.Context, client kubernetes.Interface, namespace string) error {
+	const name = "opl-fabric-api"
+	if _, err := client.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
+		return nil
+	} else if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("service account %q: %w", name, err)
+	}
+	_, err := client.CoreV1().ServiceAccounts(namespace).Create(ctx, &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: fabricControlPlaneLabels()},
+	}, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create service account %q: %w", name, err)
+	}
+	return nil
+}
+
+func ensureFabricRole(ctx context.Context, client kubernetes.Interface, namespace string) error {
+	const name = "opl-fabric-api"
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: fabricControlPlaneLabels()},
+		Rules: []rbacv1.PolicyRule{
+			{APIGroups: []string{"apps"}, Resources: []string{"deployments"}, Verbs: []string{"create", "get", "update", "delete"}},
+			{APIGroups: []string{""}, Resources: []string{"services"}, Verbs: []string{"create", "get", "delete"}},
+			{APIGroups: []string{""}, Resources: []string{"persistentvolumeclaims", "secrets"}, Verbs: []string{"create", "get", "delete"}},
+			{APIGroups: []string{"networking.k8s.io"}, Resources: []string{"ingresses"}, Verbs: []string{"create", "get", "update"}},
+		},
+	}
+	existing, err := client.RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		role.ResourceVersion = existing.ResourceVersion
+		if _, err := client.RbacV1().Roles(namespace).Update(ctx, role, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("update role %q: %w", name, err)
+		}
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("role %q: %w", name, err)
+	}
+	if _, err := client.RbacV1().Roles(namespace).Create(ctx, role, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create role %q: %w", name, err)
+	}
+	return nil
+}
+
+func ensureFabricRoleBinding(ctx context.Context, client kubernetes.Interface, namespace string) error {
+	const name = "opl-fabric-api"
+	binding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: fabricControlPlaneLabels()},
+		Subjects: []rbacv1.Subject{{
+			Kind: "ServiceAccount",
+			Name: name,
+		}},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     name,
+		},
+	}
+	existing, err := client.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		binding.ResourceVersion = existing.ResourceVersion
+		if _, err := client.RbacV1().RoleBindings(namespace).Update(ctx, binding, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("update role binding %q: %w", name, err)
+		}
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("role binding %q: %w", name, err)
+	}
+	if _, err := client.RbacV1().RoleBindings(namespace).Create(ctx, binding, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create role binding %q: %w", name, err)
+	}
+	return nil
+}
+
+func ensureImagePullSecret(ctx context.Context, client kubernetes.Interface, namespace, name string) error {
+	if namespace == "" || name == "" {
+		return errors.New("image pull secret namespace and name are required")
+	}
+	if _, err := client.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
+		return nil
+	} else if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("image pull secret %q: %w", name, err)
+	}
+	sourceNamespace := strings.TrimSpace(os.Getenv("OPL_LIVE_E2E_IMAGE_PULL_SECRET_SOURCE_NAMESPACE"))
+	if sourceNamespace == "" || sourceNamespace == namespace {
+		return nil
+	}
+	source, err := client.CoreV1().Secrets(sourceNamespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("source image pull secret %s/%s: %w", sourceNamespace, name, err)
+	}
+	copy := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: fabricControlPlaneLabels()},
+		Type:       source.Type,
+		Data:       cloneByteMap(source.Data),
+	}
+	if _, err := client.CoreV1().Secrets(namespace).Create(ctx, copy, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("copy image pull secret %s/%s to %s/%s: %w", sourceNamespace, name, namespace, name, err)
+	}
+	return nil
+}
+
+func fabricControlPlaneLabels() map[string]string {
+	return map[string]string{"app.kubernetes.io/name": "opl-fabric-api"}
+}
+
+func cloneByteMap(values map[string][]byte) map[string][]byte {
+	if values == nil {
+		return nil
+	}
+	result := make(map[string][]byte, len(values))
+	for key, value := range values {
+		result[key] = append([]byte(nil), value...)
+	}
+	return result
 }
 
 func verifyPostgres(ctx context.Context, cfg config.Config) error {

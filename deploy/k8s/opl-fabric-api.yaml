@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: opl-fabric
+  name: oplfabric
   labels:
     app.kubernetes.io/part-of: opl-fabric
 ---
@@ -9,7 +9,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: opl-fabric-api
-  namespace: opl-fabric
+  namespace: oplfabric
   labels:
     app.kubernetes.io/name: opl-fabric-api
 ---
@@ -17,7 +17,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: opl-fabric-api
-  namespace: opl-fabric
+  namespace: oplfabric
   labels:
     app.kubernetes.io/name: opl-fabric-api
 rules:
@@ -38,7 +38,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: opl-fabric-api
-  namespace: opl-fabric
+  namespace: oplfabric
   labels:
     app.kubernetes.io/name: opl-fabric-api
 subjects:
@@ -53,7 +53,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: opl-fabric-api
-  namespace: opl-fabric
+  namespace: oplfabric
   labels:
     app.kubernetes.io/name: opl-fabric-api
 spec:
@@ -172,7 +172,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: opl-fabric-api
-  namespace: opl-fabric
+  namespace: oplfabric
   labels:
     app.kubernetes.io/name: opl-fabric-api
 spec:
