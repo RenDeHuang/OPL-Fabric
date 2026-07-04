@@ -114,3 +114,12 @@ test("OpenAPI mutating routes require idempotency and correlation headers", () =
     }
   }
 });
+
+test("staging live e2e workspace image matches configured TCR namespace", () => {
+  const workflow = readFileSync(".github/workflows/fabric-staging-live-e2e.yml", "utf8");
+  const workspaceImage = workflow.match(/^\s+OPL_WORKSPACE_IMAGE:\s+(\S+)/m)?.[1];
+  const tcrNamespace = workflow.match(/^\s+TENCENT_TCR_NAMESPACE:\s+(\S+)/m)?.[1];
+
+  assert.equal(tcrNamespace, "oplcloud");
+  assert.equal(workspaceImage, `uswccr.ccs.tencentyun.com/${tcrNamespace}/one-person-lab-app:latest`);
+});

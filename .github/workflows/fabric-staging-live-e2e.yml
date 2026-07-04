@@ -46,12 +46,12 @@ jobs:
       OPL_INGRESS_CLASS: qcloud
       OPL_WORKSPACE_DOMAIN: workspace.medopl.cn
       OPL_IMAGE_PULL_SECRET_NAME: tcr-pull-secret
-      OPL_WORKSPACE_IMAGE: uswccr.ccs.tencentyun.com/medopl/one-person-lab-app:latest
+      OPL_WORKSPACE_IMAGE: uswccr.ccs.tencentyun.com/oplcloud/one-person-lab-app:latest
 
       TENCENT_DEPLOY_CLUSTER_ID: cls-fi097sy4
       TENCENT_TKE_REGION: na-siliconvalley
       TENCENT_TCR_REGISTRY: uswccr.ccs.tencentyun.com
-      TENCENT_TCR_NAMESPACE: medopl
+      TENCENT_TCR_NAMESPACE: oplcloud
       TENCENT_TCR_REGION: na-siliconvalley
       TENCENT_CVM_SUBNET_ID: subnet-a1fldajw
       TENCENT_CVM_SECURITY_GROUP_IDS: sg-6671l5we
