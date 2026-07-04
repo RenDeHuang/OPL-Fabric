@@ -109,7 +109,7 @@ OPL_OPERATOR_TOKEN=dev-operator-token npm --prefix apps/fabric-console run dev
 
 `deploy/k8s/opl-fabric-api.yaml` contains a namespace-scoped skeleton for the Fabric API:
 
-- `Deployment` and `Service` on port `8787`.
+- `Namespace`, `Deployment`, and `Service` on port `8787`.
 - `ServiceAccount`, `Role`, and `RoleBinding` with namespace-scoped client-go permissions for Deployments, Services, PVCs, Secrets, and Ingresses used by the worker path.
 - Default image `opl-fabric-api:local`; replace it with a registry image in your deployment pipeline or overlay.
 - `OPL_K8S_NAMESPACE` populated from the pod metadata namespace.
