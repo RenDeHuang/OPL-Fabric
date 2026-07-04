@@ -115,7 +115,7 @@ OPL_OPERATOR_TOKEN=dev-operator-token npm --prefix apps/fabric-console run dev
 - `OPL_K8S_NAMESPACE` populated from the pod metadata namespace.
 - Workspace defaults matching backend config: `OPL_WORKSPACE_IMAGE`, `OPL_WORKSPACE_DOMAIN`, and `OPL_WORKSPACE_STORAGE_CLASS`.
 - Worker defaults are present but disabled through `OPL_FABRIC_WORKER_ENABLED=false`.
-- Tencent capacity defaults are placeholders only: `TENCENT_TKE_REGION`, `TENCENT_DEPLOY_CLUSTER_ID`, TCR refs, and hourly node pool charge type. Real mutation credentials must come from Secret keys.
+- Tencent capacity defaults are placeholders only: `TENCENT_TKE_REGION`, `TENCENT_DEPLOY_CLUSTER_ID`, TCR refs, CVM subnet/security group IDs, system disk defaults, and hourly node pool charge type. Real mutation credentials must come from Secret keys.
 - NodePool mutation is explicitly disabled by `OPL_TKE_ALLOW_NODEPOOL_MUTATION=false`. Staging/prod overlays must opt in only after the gate reports `ready_for_live`.
 
 The manifest expects this placeholder Secret in the same namespace:

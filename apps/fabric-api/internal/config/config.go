@@ -25,8 +25,10 @@ type Config struct {
 	TencentTCRRegistry          string
 	TencentTCRNamespace         string
 	TencentTCRRegion            string
-	TKENodePoolAutoscalingJSON  string
-	TKENodePoolLaunchJSON       string
+	TencentCVMSubnetIDs         string
+	TencentCVMSecurityGroupIDs  string
+	TencentCVMSystemDiskType    string
+	TencentCVMSystemDiskSizeGB  string
 	TKEInstanceChargeType       string
 	TKENodePoolDesiredPodNumber string
 	TKEAllowNodePoolMutation    string
@@ -70,8 +72,10 @@ func Load() Config {
 		TencentTCRRegistry:          os.Getenv("TENCENT_TCR_REGISTRY"),
 		TencentTCRNamespace:         os.Getenv("TENCENT_TCR_NAMESPACE"),
 		TencentTCRRegion:            os.Getenv("TENCENT_TCR_REGION"),
-		TKENodePoolAutoscalingJSON:  os.Getenv("OPL_TKE_NODEPOOL_AUTOSCALING_GROUP_PARA_JSON"),
-		TKENodePoolLaunchJSON:       os.Getenv("OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON"),
+		TencentCVMSubnetIDs:         os.Getenv("TENCENT_CVM_SUBNET_ID"),
+		TencentCVMSecurityGroupIDs:  os.Getenv("TENCENT_CVM_SECURITY_GROUP_IDS"),
+		TencentCVMSystemDiskType:    env("TENCENT_CVM_SYSTEM_DISK_TYPE", "CLOUD_BSSD"),
+		TencentCVMSystemDiskSizeGB:  env("TENCENT_CVM_SYSTEM_DISK_SIZE_GB", "50"),
 		TKEInstanceChargeType:       env("OPL_TKE_INSTANCE_CHARGE_TYPE", "POSTPAID_BY_HOUR"),
 		TKENodePoolDesiredPodNumber: os.Getenv("OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER"),
 		TKEAllowNodePoolMutation:    env("OPL_TKE_ALLOW_NODEPOOL_MUTATION", "false"),

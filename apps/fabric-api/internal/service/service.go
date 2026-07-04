@@ -35,43 +35,47 @@ type Store interface {
 }
 
 type Config struct {
-	Catalog             catalog.Catalog
-	DatabaseURL         string
-	OperatorToken       string
-	KubernetesNamespace string
-	IngressClass        string
-	ImagePullSecretName string
-	WorkspaceImage      string
-	WorkspaceDomain     string
-	StorageClass        string
-	TencentTKERegion    string
-	TencentClusterID    string
-	TencentSecretID     string
-	TencentSecretKey    string
-	TencentTCRRegistry  string
-	TencentTCRNamespace string
-	TencentTCRRegion    string
-	Store               Store
+	Catalog                    catalog.Catalog
+	DatabaseURL                string
+	OperatorToken              string
+	KubernetesNamespace        string
+	IngressClass               string
+	ImagePullSecretName        string
+	WorkspaceImage             string
+	WorkspaceDomain            string
+	StorageClass               string
+	TencentTKERegion           string
+	TencentClusterID           string
+	TencentSecretID            string
+	TencentSecretKey           string
+	TencentTCRRegistry         string
+	TencentTCRNamespace        string
+	TencentTCRRegion           string
+	TencentCVMSubnetIDs        string
+	TencentCVMSecurityGroupIDs string
+	Store                      Store
 }
 
 type Service struct {
-	catalog             catalog.Catalog
-	databaseURL         string
-	operatorToken       string
-	kubernetesNamespace string
-	ingressClass        string
-	imagePullSecretName string
-	workspaceImage      string
-	workspaceDomain     string
-	storageClass        string
-	tencentTKERegion    string
-	tencentClusterID    string
-	tencentSecretID     string
-	tencentSecretKey    string
-	tencentTCRRegistry  string
-	tencentTCRNamespace string
-	tencentTCRRegion    string
-	store               Store
+	catalog                    catalog.Catalog
+	databaseURL                string
+	operatorToken              string
+	kubernetesNamespace        string
+	ingressClass               string
+	imagePullSecretName        string
+	workspaceImage             string
+	workspaceDomain            string
+	storageClass               string
+	tencentTKERegion           string
+	tencentClusterID           string
+	tencentSecretID            string
+	tencentSecretKey           string
+	tencentTCRRegistry         string
+	tencentTCRNamespace        string
+	tencentTCRRegion           string
+	tencentCVMSubnetIDs        string
+	tencentCVMSecurityGroupIDs string
+	store                      Store
 }
 
 type Readiness struct {
@@ -85,23 +89,25 @@ type Readiness struct {
 
 func New(cfg Config) *Service {
 	return &Service{
-		catalog:             cfg.Catalog,
-		databaseURL:         cfg.DatabaseURL,
-		operatorToken:       cfg.OperatorToken,
-		kubernetesNamespace: cfg.KubernetesNamespace,
-		ingressClass:        cfg.IngressClass,
-		imagePullSecretName: cfg.ImagePullSecretName,
-		workspaceImage:      cfg.WorkspaceImage,
-		workspaceDomain:     cfg.WorkspaceDomain,
-		storageClass:        cfg.StorageClass,
-		tencentTKERegion:    cfg.TencentTKERegion,
-		tencentClusterID:    cfg.TencentClusterID,
-		tencentSecretID:     cfg.TencentSecretID,
-		tencentSecretKey:    cfg.TencentSecretKey,
-		tencentTCRRegistry:  cfg.TencentTCRRegistry,
-		tencentTCRNamespace: cfg.TencentTCRNamespace,
-		tencentTCRRegion:    cfg.TencentTCRRegion,
-		store:               cfg.Store,
+		catalog:                    cfg.Catalog,
+		databaseURL:                cfg.DatabaseURL,
+		operatorToken:              cfg.OperatorToken,
+		kubernetesNamespace:        cfg.KubernetesNamespace,
+		ingressClass:               cfg.IngressClass,
+		imagePullSecretName:        cfg.ImagePullSecretName,
+		workspaceImage:             cfg.WorkspaceImage,
+		workspaceDomain:            cfg.WorkspaceDomain,
+		storageClass:               cfg.StorageClass,
+		tencentTKERegion:           cfg.TencentTKERegion,
+		tencentClusterID:           cfg.TencentClusterID,
+		tencentSecretID:            cfg.TencentSecretID,
+		tencentSecretKey:           cfg.TencentSecretKey,
+		tencentTCRRegistry:         cfg.TencentTCRRegistry,
+		tencentTCRNamespace:        cfg.TencentTCRNamespace,
+		tencentTCRRegion:           cfg.TencentTCRRegion,
+		tencentCVMSubnetIDs:        cfg.TencentCVMSubnetIDs,
+		tencentCVMSecurityGroupIDs: cfg.TencentCVMSecurityGroupIDs,
+		store:                      cfg.Store,
 	}
 }
 
@@ -581,6 +587,12 @@ func (s *Service) missingEnv() []string {
 	}
 	if s.tencentTCRRegion == "" {
 		missing = append(missing, "TENCENT_TCR_REGION")
+	}
+	if s.tencentCVMSubnetIDs == "" {
+		missing = append(missing, "TENCENT_CVM_SUBNET_ID")
+	}
+	if s.tencentCVMSecurityGroupIDs == "" {
+		missing = append(missing, "TENCENT_CVM_SECURITY_GROUP_IDS")
 	}
 	return missing
 }

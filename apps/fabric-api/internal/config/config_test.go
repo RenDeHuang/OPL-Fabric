@@ -16,8 +16,10 @@ func TestLoadReadsFabricConfigDirAndWorkspaceDefaults(t *testing.T) {
 	t.Setenv("TENCENT_DEPLOY_CLUSTER_ID", "cls-example")
 	t.Setenv("TENCENT_MUTATION_SECRET_ID", "secret-id")
 	t.Setenv("TENCENT_MUTATION_SECRET_KEY", "secret-key")
-	t.Setenv("OPL_TKE_NODEPOOL_AUTOSCALING_GROUP_PARA_JSON", `{"MinSize":0,"MaxSize":3}`)
-	t.Setenv("OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON", `{"SystemDisk":{"DiskType":"CLOUD_BSSD"}}`)
+	t.Setenv("TENCENT_CVM_SUBNET_ID", "subnet-1")
+	t.Setenv("TENCENT_CVM_SECURITY_GROUP_IDS", "sg-1")
+	t.Setenv("TENCENT_CVM_SYSTEM_DISK_TYPE", "CLOUD_BSSD")
+	t.Setenv("TENCENT_CVM_SYSTEM_DISK_SIZE_GB", "50")
 	t.Setenv("OPL_TKE_INSTANCE_CHARGE_TYPE", "POSTPAID_BY_HOUR")
 	t.Setenv("OPL_STAGING_E2E_ALLOW_LIVE", "true")
 	t.Setenv("OPL_CODEX_MODEL", "gpt-5.5")
@@ -47,8 +49,11 @@ func TestLoadReadsFabricConfigDirAndWorkspaceDefaults(t *testing.T) {
 	if cfg.TencentMutationSecretID != "secret-id" {
 		t.Fatalf("TencentMutationSecretID not loaded")
 	}
-	if cfg.TKENodePoolAutoscalingJSON == "" || cfg.TKENodePoolLaunchJSON == "" {
-		t.Fatalf("TKE node pool JSON inputs not loaded")
+	if cfg.TencentCVMSubnetIDs != "subnet-1" || cfg.TencentCVMSecurityGroupIDs != "sg-1" {
+		t.Fatalf("Tencent CVM network config not loaded: %+v", cfg)
+	}
+	if cfg.TencentCVMSystemDiskType != "CLOUD_BSSD" || cfg.TencentCVMSystemDiskSizeGB != "50" {
+		t.Fatalf("Tencent CVM disk config not loaded: %+v", cfg)
 	}
 	if cfg.StagingE2EAllowLive != "true" {
 		t.Fatalf("StagingE2EAllowLive = %q", cfg.StagingE2EAllowLive)

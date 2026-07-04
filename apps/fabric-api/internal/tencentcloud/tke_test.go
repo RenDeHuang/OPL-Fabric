@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	tke "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tke/v20180525"
+	tke "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tke/v20220501"
 )
 
 func TestNewTKEClientRequiresCredentialBoundary(t *testing.T) {
@@ -48,8 +48,8 @@ func TestResolveNodePoolPlanRespectsMutationGate(t *testing.T) {
 		Region:           "ap-guangzhou",
 		SecretID:         "secret-id",
 		SecretKey:        "secret-key",
-		LaunchConfigJSON: `{"InstanceType":"SA5.LARGE8"}`,
-		AutoscalingJSON:  `{"MinSize":0,"MaxSize":3}`,
+		SubnetIDs:        "subnet-1",
+		SecurityGroupIDs: "sg-1",
 		MutationAllowed:  false,
 	})
 	if err != nil {
@@ -69,12 +69,13 @@ func TestResolveNodePoolPlanValidatesJSON(t *testing.T) {
 		Region:           "ap-guangzhou",
 		SecretID:         "secret-id",
 		SecretKey:        "secret-key",
-		LaunchConfigJSON: `{"InstanceType":`,
-		AutoscalingJSON:  `{"MinSize":0,"MaxSize":3}`,
+		SubnetIDs:        "subnet-1",
+		SecurityGroupIDs: "sg-1",
+		SystemDiskSizeGB: "not-a-number",
 		MutationAllowed:  true,
 	})
-	if !errors.Is(err, ErrInvalidNodePoolJSON) {
-		t.Fatalf("error = %v, want %v", err, ErrInvalidNodePoolJSON)
+	if !errors.Is(err, ErrMissingNodePoolConfig) {
+		t.Fatalf("error = %v, want %v", err, ErrMissingNodePoolConfig)
 	}
 }
 
@@ -84,8 +85,10 @@ func TestResolveNodePoolPlanReturnsTencentSDKBoundary(t *testing.T) {
 		Region:                    "ap-guangzhou",
 		SecretID:                  "secret-id",
 		SecretKey:                 "secret-key",
-		LaunchConfigJSON:          `{"InstanceType":"SA5.LARGE8"}`,
-		AutoscalingJSON:           `{"MinSize":0,"MaxSize":3}`,
+		SubnetIDs:                 "subnet-a,subnet-b",
+		SecurityGroupIDs:          "sg-a,sg-b",
+		SystemDiskType:            "CLOUD_BSSD",
+		SystemDiskSizeGB:          "50",
 		InstanceChargeType:        "POSTPAID_BY_HOUR",
 		DesiredPodNumber:          "0",
 		MutationAllowed:           true,
@@ -97,14 +100,17 @@ func TestResolveNodePoolPlanReturnsTencentSDKBoundary(t *testing.T) {
 	if !plan.MutationAllowed {
 		t.Fatal("mutation should be allowed in plan")
 	}
-	if plan.SDKAction != "CreateClusterNodePool" {
+	if plan.SDKAction != "CreateNodePool" {
 		t.Fatalf("SDKAction = %q", plan.SDKAction)
 	}
-	if plan.LaunchConfig["InstanceType"] != "SA5.LARGE8" {
-		t.Fatalf("launch config = %+v", plan.LaunchConfig)
+	if len(plan.SubnetIDs) != 2 || plan.SubnetIDs[0] != "subnet-a" || plan.SubnetIDs[1] != "subnet-b" {
+		t.Fatalf("subnet ids = %+v", plan.SubnetIDs)
 	}
-	if plan.Autoscaling["MaxSize"] != float64(3) {
-		t.Fatalf("autoscaling = %+v", plan.Autoscaling)
+	if len(plan.SecurityGroupIDs) != 2 || plan.SecurityGroupIDs[0] != "sg-a" || plan.SecurityGroupIDs[1] != "sg-b" {
+		t.Fatalf("security group ids = %+v", plan.SecurityGroupIDs)
+	}
+	if plan.SystemDiskType != "CLOUD_BSSD" || plan.SystemDiskSizeGB != 50 {
+		t.Fatalf("system disk = %s/%d", plan.SystemDiskType, plan.SystemDiskSizeGB)
 	}
 }
 
@@ -116,8 +122,8 @@ func TestNodePoolProviderRequiresMutationGateForCreateAndDelete(t *testing.T) {
 			Region:           "ap-guangzhou",
 			SecretID:         "secret-id",
 			SecretKey:        "secret-key",
-			LaunchConfigJSON: `{"InstanceType":"SA5.LARGE8"}`,
-			AutoscalingJSON:  `{"MinSize":0,"MaxSize":3}`,
+			SubnetIDs:        "subnet-1",
+			SecurityGroupIDs: "sg-1",
 			MutationAllowed:  false,
 		},
 	}
@@ -140,8 +146,10 @@ func TestNodePoolProviderCreatesVerifiesAndDeletesNodePool(t *testing.T) {
 			Region:             "ap-guangzhou",
 			SecretID:           "secret-id",
 			SecretKey:          "secret-key",
-			LaunchConfigJSON:   `{"InstanceType":"SA5.LARGE8"}`,
-			AutoscalingJSON:    `{"MinSize":0,"MaxSize":3}`,
+			SubnetIDs:          "subnet-1",
+			SecurityGroupIDs:   "sg-1",
+			SystemDiskType:     "CLOUD_BSSD",
+			SystemDiskSizeGB:   "50",
 			InstanceChargeType: "POSTPAID_BY_HOUR",
 			DesiredPodNumber:   "0",
 			MutationAllowed:    true,
@@ -152,6 +160,7 @@ func TestNodePoolProviderCreatesVerifiesAndDeletesNodePool(t *testing.T) {
 		ComputeID:                 "compute-1",
 		WorkspaceID:               "ws-1",
 		RequestedComputeShapeJSON: `{"cpu":4,"memoryGb":8}`,
+		ProviderInstanceType:      "SA5.LARGE8",
 	})
 	if err != nil {
 		t.Fatalf("EnsureNodePool: %v", err)
@@ -162,11 +171,26 @@ func TestNodePoolProviderCreatesVerifiesAndDeletesNodePool(t *testing.T) {
 	if client.createRequest == nil || value(client.createRequest.ClusterId) != "cls-example" || value(client.createRequest.Name) != "opl-compute-1" {
 		t.Fatalf("create request = %+v", client.createRequest)
 	}
-	if value(client.createRequest.AutoScalingGroupPara) != `{"MinSize":0,"MaxSize":3}` {
-		t.Fatalf("autoscaling = %q", value(client.createRequest.AutoScalingGroupPara))
+	if value(client.createRequest.Type) != "Native" {
+		t.Fatalf("node pool type = %q", value(client.createRequest.Type))
 	}
-	if value(client.createRequest.LaunchConfigurePara) != `{"InstanceType":"SA5.LARGE8"}` {
-		t.Fatalf("launch = %q", value(client.createRequest.LaunchConfigurePara))
+	if client.createRequest.Native == nil {
+		t.Fatal("native config is nil")
+	}
+	if valueInt64(client.createRequest.Native.Replicas) != 0 {
+		t.Fatalf("replicas = %d, want 0", valueInt64(client.createRequest.Native.Replicas))
+	}
+	if len(client.createRequest.Native.InstanceTypes) != 1 || value(client.createRequest.Native.InstanceTypes[0]) != "SA5.LARGE8" {
+		t.Fatalf("instance types = %+v", client.createRequest.Native.InstanceTypes)
+	}
+	if len(client.createRequest.Native.SubnetIds) != 1 || value(client.createRequest.Native.SubnetIds[0]) != "subnet-1" {
+		t.Fatalf("subnet ids = %+v", client.createRequest.Native.SubnetIds)
+	}
+	if len(client.createRequest.Native.SecurityGroupIds) != 1 || value(client.createRequest.Native.SecurityGroupIds[0]) != "sg-1" {
+		t.Fatalf("security groups = %+v", client.createRequest.Native.SecurityGroupIds)
+	}
+	if client.createRequest.Native.SystemDisk == nil || value(client.createRequest.Native.SystemDisk.DiskType) != "CLOUD_BSSD" || valueInt64(client.createRequest.Native.SystemDisk.DiskSize) != 50 {
+		t.Fatalf("system disk = %+v", client.createRequest.Native.SystemDisk)
 	}
 
 	verified, err := provider.VerifyNodePool(context.Background(), "np-created")
@@ -183,35 +207,32 @@ func TestNodePoolProviderCreatesVerifiesAndDeletesNodePool(t *testing.T) {
 	if err := provider.DeleteNodePool(context.Background(), "np-created"); err != nil {
 		t.Fatalf("DeleteNodePool: %v", err)
 	}
-	if client.deleteRequest == nil || value(client.deleteRequest.ClusterId) != "cls-example" || len(client.deleteRequest.NodePoolIds) != 1 || value(client.deleteRequest.NodePoolIds[0]) != "np-created" {
+	if client.deleteRequest == nil || value(client.deleteRequest.ClusterId) != "cls-example" || value(client.deleteRequest.NodePoolId) != "np-created" {
 		t.Fatalf("delete request = %+v", client.deleteRequest)
-	}
-	if valueBool(client.deleteRequest.KeepInstance) {
-		t.Fatal("KeepInstance = true, want false")
 	}
 }
 
 type fakeTKEClient struct {
 	nodePoolID      string
 	lifeState       string
-	createRequest   *tke.CreateClusterNodePoolRequest
-	describeRequest *tke.DescribeClusterNodePoolsRequest
-	deleteRequest   *tke.DeleteClusterNodePoolRequest
+	createRequest   *tke.CreateNodePoolRequest
+	describeRequest *tke.DescribeNodePoolsRequest
+	deleteRequest   *tke.DeleteNodePoolRequest
 }
 
-func (c *fakeTKEClient) CreateClusterNodePoolWithContext(_ context.Context, request *tke.CreateClusterNodePoolRequest) (*tke.CreateClusterNodePoolResponse, error) {
+func (c *fakeTKEClient) CreateNodePoolWithContext(_ context.Context, request *tke.CreateNodePoolRequest) (*tke.CreateNodePoolResponse, error) {
 	c.createRequest = request
-	return &tke.CreateClusterNodePoolResponse{Response: &tke.CreateClusterNodePoolResponseParams{NodePoolId: common.StringPtr(c.nodePoolID)}}, nil
+	return &tke.CreateNodePoolResponse{Response: &tke.CreateNodePoolResponseParams{NodePoolId: common.StringPtr(c.nodePoolID)}}, nil
 }
 
-func (c *fakeTKEClient) DescribeClusterNodePoolsWithContext(_ context.Context, request *tke.DescribeClusterNodePoolsRequest) (*tke.DescribeClusterNodePoolsResponse, error) {
+func (c *fakeTKEClient) DescribeNodePoolsWithContext(_ context.Context, request *tke.DescribeNodePoolsRequest) (*tke.DescribeNodePoolsResponse, error) {
 	c.describeRequest = request
-	return &tke.DescribeClusterNodePoolsResponse{Response: &tke.DescribeClusterNodePoolsResponseParams{NodePoolSet: []*tke.NodePool{{NodePoolId: common.StringPtr(c.nodePoolID), LifeState: common.StringPtr(c.lifeState)}}}}, nil
+	return &tke.DescribeNodePoolsResponse{Response: &tke.DescribeNodePoolsResponseParams{NodePools: []*tke.NodePool{{NodePoolId: common.StringPtr(c.nodePoolID), LifeState: common.StringPtr(c.lifeState)}}}}, nil
 }
 
-func (c *fakeTKEClient) DeleteClusterNodePoolWithContext(_ context.Context, request *tke.DeleteClusterNodePoolRequest) (*tke.DeleteClusterNodePoolResponse, error) {
+func (c *fakeTKEClient) DeleteNodePoolWithContext(_ context.Context, request *tke.DeleteNodePoolRequest) (*tke.DeleteNodePoolResponse, error) {
 	c.deleteRequest = request
-	return &tke.DeleteClusterNodePoolResponse{Response: &tke.DeleteClusterNodePoolResponseParams{RequestId: common.StringPtr("req-1")}}, nil
+	return &tke.DeleteNodePoolResponse{Response: &tke.DeleteNodePoolResponseParams{RequestId: common.StringPtr("req-1")}}, nil
 }
 
 func value(ptr *string) string {
@@ -224,6 +245,13 @@ func value(ptr *string) string {
 func valueBool(ptr *bool) bool {
 	if ptr == nil {
 		return false
+	}
+	return *ptr
+}
+
+func valueInt64(ptr *int64) int64 {
+	if ptr == nil {
+		return 0
 	}
 	return *ptr
 }

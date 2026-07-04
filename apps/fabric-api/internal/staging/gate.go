@@ -1,27 +1,29 @@
 package staging
 
 type Config struct {
-	DatabaseURL             string
-	OperatorToken           string
-	KubeconfigRef           string
-	Namespace               string
-	StorageClass            string
-	IngressClass            string
-	WorkspaceDomain         string
-	WorkspaceImage          string
-	ImagePullSecretName     string
-	TencentClusterID        string
-	TencentRegion           string
-	TencentSecretID         string
-	TencentSecretKey        string
-	TencentTCRRegistry      string
-	TencentTCRNamespace     string
-	TencentTCRRegion        string
-	NodePoolLaunchJSON      string
-	NodePoolAutoscalingJSON string
-	AllowNodePoolMutation   bool
-	AllowStagingE2E         bool
-	WorkerEnabled           bool
+	DatabaseURL                string
+	OperatorToken              string
+	KubeconfigRef              string
+	Namespace                  string
+	StorageClass               string
+	IngressClass               string
+	WorkspaceDomain            string
+	WorkspaceImage             string
+	ImagePullSecretName        string
+	TencentClusterID           string
+	TencentRegion              string
+	TencentSecretID            string
+	TencentSecretKey           string
+	TencentTCRRegistry         string
+	TencentTCRNamespace        string
+	TencentTCRRegion           string
+	TencentCVMSubnetIDs        string
+	TencentCVMSecurityGroupIDs string
+	TencentCVMSystemDiskType   string
+	TencentCVMSystemDiskSizeGB string
+	AllowNodePoolMutation      bool
+	AllowStagingE2E            bool
+	WorkerEnabled              bool
 }
 
 type Result struct {
@@ -54,8 +56,8 @@ func EvaluateGate(cfg Config) Result {
 	require("TENCENT_TCR_REGISTRY", cfg.TencentTCRRegistry)
 	require("TENCENT_TCR_NAMESPACE", cfg.TencentTCRNamespace)
 	require("TENCENT_TCR_REGION", cfg.TencentTCRRegion)
-	require("OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON", cfg.NodePoolLaunchJSON)
-	require("OPL_TKE_NODEPOOL_AUTOSCALING_GROUP_PARA_JSON", cfg.NodePoolAutoscalingJSON)
+	require("TENCENT_CVM_SUBNET_ID", cfg.TencentCVMSubnetIDs)
+	require("TENCENT_CVM_SECURITY_GROUP_IDS", cfg.TencentCVMSecurityGroupIDs)
 
 	blockers := []string{}
 	mode := "dry_run"

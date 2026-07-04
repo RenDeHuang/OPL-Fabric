@@ -1,0 +1,133 @@
+name: Fabric Staging Live E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      check_only:
+        description: "Run gate, PostgreSQL, Kubernetes, and Tencent read checks only"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      confirm_live:
+        description: "Type LIVE to allow real staging create/delete when check_only=false"
+        required: false
+        default: ""
+        type: string
+      provider_instance_type:
+        description: "Tencent CVM instance type for the live workspace compute"
+        required: false
+        default: "SA5.LARGE4"
+        type: string
+
+jobs:
+  staging-live-e2e:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OPL_OPERATOR_TOKEN: ${{ secrets.OPL_OPERATOR_TOKEN }}
+      TENCENT_DEPLOY_KUBECONFIG_B64: ${{ secrets.TENCENT_DEPLOY_KUBECONFIG_B64 }}
+      TENCENT_MUTATION_SECRET_ID: ${{ secrets.TENCENT_MUTATION_SECRET_ID }}
+      TENCENT_MUTATION_SECRET_KEY: ${{ secrets.TENCENT_MUTATION_SECRET_KEY }}
+
+      OPL_K8S_NAMESPACE: opl-fabric
+      OPL_WORKSPACE_STORAGE_CLASS: cbs
+      OPL_INGRESS_CLASS: qcloud
+      OPL_WORKSPACE_DOMAIN: workspace.medopl.cn
+      OPL_IMAGE_PULL_SECRET_NAME: tcr-pull-secret
+      OPL_WORKSPACE_IMAGE: uswccr.ccs.tencentyun.com/medopl/one-person-lab-app:latest
+
+      TENCENT_DEPLOY_CLUSTER_ID: cls-fi097sy4
+      TENCENT_TKE_REGION: na-siliconvalley
+      TENCENT_TCR_REGISTRY: uswccr.ccs.tencentyun.com
+      TENCENT_TCR_NAMESPACE: medopl
+      TENCENT_TCR_REGION: na-siliconvalley
+      TENCENT_CVM_SUBNET_ID: subnet-a1fldajw
+      TENCENT_CVM_SECURITY_GROUP_IDS: sg-ijs6k5ro,sg-6671l5we
+      TENCENT_CVM_SYSTEM_DISK_TYPE: CLOUD_BSSD
+      TENCENT_CVM_SYSTEM_DISK_SIZE_GB: "50"
+
+      OPL_FABRIC_WORKER_ENABLED: "true"
+      OPL_TKE_ALLOW_NODEPOOL_MUTATION: "true"
+      OPL_STAGING_E2E_ALLOW_LIVE: "true"
+      OPL_LIVE_E2E_PROVIDER_INSTANCE_TYPE: ${{ inputs.provider_instance_type }}
+      OPL_LIVE_E2E_CHECK_ONLY: ${{ inputs.check_only }}
+      OPL_LIVE_E2E_TIMEOUT: 30m
+    steps:
+      - name: Refuse unconfirmed live mutation
+        if: ${{ inputs.check_only == 'false' && inputs.confirm_live != 'LIVE' }}
+        shell: bash
+        run: |
+          echo "::error::Real staging mutation requires confirm_live=LIVE."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/fabric-api/go.mod
+          cache-dependency-path: apps/fabric-api/go.sum
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install console dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f apps/fabric-console/package.json ]; then
+            npm --prefix apps/fabric-console install
+          fi
+
+      - name: Decode kubeconfig without printing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubeconfig="$RUNNER_TEMP/fabric-kubeconfig"
+          raw="$RUNNER_TEMP/fabric-kubeconfig-secret"
+          printf '%s' "$TENCENT_DEPLOY_KUBECONFIG_B64" > "$raw"
+          if grep -q '^apiVersion:' "$raw"; then
+            cp "$raw" "$kubeconfig"
+          else
+            tr -d '\r\n\t ' < "$raw" | base64 -d > "$kubeconfig"
+          fi
+          test -s "$kubeconfig"
+          grep -q '^current-context:' "$kubeconfig"
+          grep -q 'server:' "$kubeconfig"
+          echo "TENCENT_DEPLOY_KUBECONFIG_REF=$kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Verify required secret injection
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in \
+            DATABASE_URL \
+            OPL_OPERATOR_TOKEN \
+            TENCENT_DEPLOY_KUBECONFIG_REF \
+            TENCENT_MUTATION_SECRET_ID \
+            TENCENT_MUTATION_SECRET_KEY
+          do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::$key is missing"
+              exit 1
+            fi
+            echo "$key=set"
+          done
+
+      - name: Unit and contract tests
+        shell: bash
+        run: npm test
+
+      - name: Run Fabric staging live e2e runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/fabric-api
+          go run ./cmd/fabric-live-e2e

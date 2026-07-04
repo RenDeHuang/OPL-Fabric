@@ -108,6 +108,14 @@ spec:
               value: opl
             - name: TENCENT_TCR_REGION
               value: ap-guangzhou
+            - name: TENCENT_CVM_SUBNET_ID
+              value: subnet-xxxxxxxx
+            - name: TENCENT_CVM_SECURITY_GROUP_IDS
+              value: sg-xxxxxxxx
+            - name: TENCENT_CVM_SYSTEM_DISK_TYPE
+              value: CLOUD_BSSD
+            - name: TENCENT_CVM_SYSTEM_DISK_SIZE_GB
+              value: "50"
             - name: OPL_TKE_INSTANCE_CHARGE_TYPE
               value: POSTPAID_BY_HOUR
             - name: OPL_TKE_ALLOW_NODEPOOL_MUTATION

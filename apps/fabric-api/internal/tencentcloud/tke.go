@@ -2,13 +2,13 @@ package tencentcloud
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
-	tke "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tke/v20180525"
+	tke "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tke/v20220501"
 )
 
 var ErrMissingTencentCredential = errors.New("missing_tencent_cloud_credential")
@@ -27,8 +27,10 @@ type NodePoolResolverConfig struct {
 	Region                    string
 	SecretID                  string
 	SecretKey                 string
-	LaunchConfigJSON          string
-	AutoscalingJSON           string
+	SubnetIDs                 string
+	SecurityGroupIDs          string
+	SystemDiskType            string
+	SystemDiskSizeGB          string
 	InstanceChargeType        string
 	DesiredPodNumber          string
 	MutationAllowed           bool
@@ -42,15 +44,17 @@ type NodePoolPlan struct {
 	InstanceChargeType        string
 	DesiredPodNumber          int64
 	MutationAllowed           bool
-	LaunchConfig              map[string]any
-	Autoscaling               map[string]any
+	SubnetIDs                 []string
+	SecurityGroupIDs          []string
+	SystemDiskType            string
+	SystemDiskSizeGB          int64
 	RequestedComputeShapeJSON string
 }
 
 type TKEAPI interface {
-	CreateClusterNodePoolWithContext(context.Context, *tke.CreateClusterNodePoolRequest) (*tke.CreateClusterNodePoolResponse, error)
-	DescribeClusterNodePoolsWithContext(context.Context, *tke.DescribeClusterNodePoolsRequest) (*tke.DescribeClusterNodePoolsResponse, error)
-	DeleteClusterNodePoolWithContext(context.Context, *tke.DeleteClusterNodePoolRequest) (*tke.DeleteClusterNodePoolResponse, error)
+	CreateNodePoolWithContext(context.Context, *tke.CreateNodePoolRequest) (*tke.CreateNodePoolResponse, error)
+	DescribeNodePoolsWithContext(context.Context, *tke.DescribeNodePoolsRequest) (*tke.DescribeNodePoolsResponse, error)
+	DeleteNodePoolWithContext(context.Context, *tke.DeleteNodePoolRequest) (*tke.DeleteNodePoolResponse, error)
 }
 
 type NodePoolProvider struct {
@@ -62,6 +66,7 @@ type NodePoolRequest struct {
 	ComputeID                 string
 	WorkspaceID               string
 	RequestedComputeShapeJSON string
+	ProviderInstanceType      string
 }
 
 type NodePoolResult struct {
@@ -74,20 +79,15 @@ func NewTKEClient(cfg TKEConfig) (*tke.Client, error) {
 	}
 	credential := common.NewCredential(cfg.SecretID, cfg.SecretKey)
 	clientProfile := profile.NewClientProfile()
+	clientProfile.HttpProfile.Endpoint = "tke.tencentcloudapi.com"
 	return tke.NewClient(credential, cfg.Region, clientProfile)
 }
 
 func ResolveNodePoolPlan(cfg NodePoolResolverConfig) (NodePoolPlan, error) {
-	if cfg.ClusterID == "" || cfg.Region == "" || cfg.SecretID == "" || cfg.SecretKey == "" || cfg.LaunchConfigJSON == "" || cfg.AutoscalingJSON == "" {
+	subnetIDs := splitCSV(cfg.SubnetIDs)
+	securityGroupIDs := splitCSV(cfg.SecurityGroupIDs)
+	if cfg.ClusterID == "" || cfg.Region == "" || cfg.SecretID == "" || cfg.SecretKey == "" || len(subnetIDs) == 0 || len(securityGroupIDs) == 0 {
 		return NodePoolPlan{}, ErrMissingNodePoolConfig
-	}
-	launchConfig, err := parseJSONMap(cfg.LaunchConfigJSON)
-	if err != nil {
-		return NodePoolPlan{}, err
-	}
-	autoscaling, err := parseJSONMap(cfg.AutoscalingJSON)
-	if err != nil {
-		return NodePoolPlan{}, err
 	}
 	desiredPodNumber := int64(0)
 	if cfg.DesiredPodNumber != "" {
@@ -97,15 +97,25 @@ func ResolveNodePoolPlan(cfg NodePoolResolverConfig) (NodePoolPlan, error) {
 		}
 		desiredPodNumber = parsed
 	}
+	systemDiskSizeGB := int64(50)
+	if cfg.SystemDiskSizeGB != "" {
+		parsed, err := strconv.ParseInt(cfg.SystemDiskSizeGB, 10, 64)
+		if err != nil || parsed <= 0 {
+			return NodePoolPlan{}, ErrMissingNodePoolConfig
+		}
+		systemDiskSizeGB = parsed
+	}
 	return NodePoolPlan{
-		SDKAction:                 "CreateClusterNodePool",
+		SDKAction:                 "CreateNodePool",
 		ClusterID:                 cfg.ClusterID,
 		Region:                    cfg.Region,
 		InstanceChargeType:        defaultString(cfg.InstanceChargeType, "POSTPAID_BY_HOUR"),
 		DesiredPodNumber:          desiredPodNumber,
 		MutationAllowed:           cfg.MutationAllowed,
-		LaunchConfig:              launchConfig,
-		Autoscaling:               autoscaling,
+		SubnetIDs:                 subnetIDs,
+		SecurityGroupIDs:          securityGroupIDs,
+		SystemDiskType:            defaultString(cfg.SystemDiskType, "CLOUD_BSSD"),
+		SystemDiskSizeGB:          systemDiskSizeGB,
 		RequestedComputeShapeJSON: cfg.RequestedComputeShapeJSON,
 	}, nil
 }
@@ -119,8 +129,10 @@ func (p NodePoolProvider) EnsureNodePool(ctx context.Context, req NodePoolReques
 		Region:                    p.Config.Region,
 		SecretID:                  p.Config.SecretID,
 		SecretKey:                 p.Config.SecretKey,
-		LaunchConfigJSON:          p.Config.LaunchConfigJSON,
-		AutoscalingJSON:           p.Config.AutoscalingJSON,
+		SubnetIDs:                 p.Config.SubnetIDs,
+		SecurityGroupIDs:          p.Config.SecurityGroupIDs,
+		SystemDiskType:            p.Config.SystemDiskType,
+		SystemDiskSizeGB:          p.Config.SystemDiskSizeGB,
 		InstanceChargeType:        p.Config.InstanceChargeType,
 		DesiredPodNumber:          p.Config.DesiredPodNumber,
 		MutationAllowed:           p.Config.MutationAllowed,
@@ -129,18 +141,46 @@ func (p NodePoolProvider) EnsureNodePool(ctx context.Context, req NodePoolReques
 	if err != nil {
 		return NodePoolResult{}, err
 	}
+	if strings.TrimSpace(req.ProviderInstanceType) == "" {
+		return NodePoolResult{}, ErrMissingNodePoolConfig
+	}
 	client, err := p.client()
 	if err != nil {
 		return NodePoolResult{}, err
 	}
-	request := tke.NewCreateClusterNodePoolRequest()
+	request := tke.NewCreateNodePoolRequest()
 	request.ClusterId = common.StringPtr(plan.ClusterID)
-	request.AutoScalingGroupPara = common.StringPtr(p.Config.AutoscalingJSON)
-	request.LaunchConfigurePara = common.StringPtr(p.Config.LaunchConfigJSON)
-	request.EnableAutoscale = common.BoolPtr(true)
 	request.Name = common.StringPtr(nodePoolName(req.ComputeID))
+	request.Type = common.StringPtr("Native")
 	request.DeletionProtection = common.BoolPtr(false)
-	response, err := client.CreateClusterNodePoolWithContext(ctx, request)
+	request.Labels = []*tke.Label{
+		{Name: common.StringPtr("oplfabric.cn/compute-id"), Value: common.StringPtr(req.ComputeID)},
+		{Name: common.StringPtr("oplfabric.cn/workspace-id"), Value: common.StringPtr(req.WorkspaceID)},
+		{Name: common.StringPtr("oplfabric.cn/instance-type"), Value: common.StringPtr(req.ProviderInstanceType)},
+	}
+	request.Native = &tke.CreateNativeNodePoolParam{
+		Scaling: &tke.MachineSetScaling{
+			MinReplicas:  common.Int64Ptr(0),
+			MaxReplicas:  common.Int64Ptr(1),
+			CreatePolicy: common.StringPtr("ZonePriority"),
+		},
+		SubnetIds:          stringsToPtrs(plan.SubnetIDs),
+		InstanceChargeType: common.StringPtr(plan.InstanceChargeType),
+		SystemDisk: &tke.Disk{
+			DiskType: common.StringPtr(plan.SystemDiskType),
+			DiskSize: common.Int64Ptr(plan.SystemDiskSizeGB),
+		},
+		InstanceTypes:      []*string{common.StringPtr(req.ProviderInstanceType)},
+		SecurityGroupIds:   stringsToPtrs(plan.SecurityGroupIDs),
+		AutoRepair:         common.BoolPtr(true),
+		EnableAutoscaling:  common.BoolPtr(true),
+		Replicas:           common.Int64Ptr(plan.DesiredPodNumber),
+		InternetAccessible: &tke.InternetAccessible{MaxBandwidthOut: common.Int64Ptr(0), ChargeType: common.StringPtr("TRAFFIC_POSTPAID_BY_HOUR")},
+		MachineType:        common.StringPtr("Native"),
+		AutomationService:  common.BoolPtr(true),
+		RuntimeRootDir:     common.StringPtr("/var/lib/containerd"),
+	}
+	response, err := client.CreateNodePoolWithContext(ctx, request)
 	if err != nil {
 		return NodePoolResult{}, err
 	}
@@ -158,27 +198,29 @@ func (p NodePoolProvider) VerifyNodePool(ctx context.Context, nodePoolID string)
 	if err != nil {
 		return false, err
 	}
-	request := tke.NewDescribeClusterNodePoolsRequest()
+	request := tke.NewDescribeNodePoolsRequest()
 	request.ClusterId = common.StringPtr(p.Config.ClusterID)
+	request.Limit = common.Int64Ptr(100)
 	request.Filters = []*tke.Filter{{
 		Name:   common.StringPtr("NodePoolsId"),
 		Values: []*string{common.StringPtr(nodePoolID)},
 	}}
-	response, err := client.DescribeClusterNodePoolsWithContext(ctx, request)
+	response, err := client.DescribeNodePoolsWithContext(ctx, request)
 	if err != nil {
 		return false, err
 	}
 	if response == nil || response.Response == nil {
 		return false, nil
 	}
-	for _, pool := range response.Response.NodePoolSet {
+	for _, pool := range response.Response.NodePools {
 		if pool == nil || pool.NodePoolId == nil || *pool.NodePoolId != nodePoolID {
 			continue
 		}
 		if pool.LifeState == nil {
 			return true, nil
 		}
-		return *pool.LifeState == "normal" || *pool.LifeState == "creating", nil
+		state := strings.ToLower(*pool.LifeState)
+		return state == "normal" || state == "creating" || state == "running", nil
 	}
 	return false, nil
 }
@@ -194,11 +236,10 @@ func (p NodePoolProvider) DeleteNodePool(ctx context.Context, nodePoolID string)
 	if err != nil {
 		return err
 	}
-	request := tke.NewDeleteClusterNodePoolRequest()
+	request := tke.NewDeleteNodePoolRequest()
 	request.ClusterId = common.StringPtr(p.Config.ClusterID)
-	request.NodePoolIds = []*string{common.StringPtr(nodePoolID)}
-	request.KeepInstance = common.BoolPtr(false)
-	_, err = client.DeleteClusterNodePoolWithContext(ctx, request)
+	request.NodePoolId = common.StringPtr(nodePoolID)
+	_, err = client.DeleteNodePoolWithContext(ctx, request)
 	return err
 }
 
@@ -207,14 +248,6 @@ func (p NodePoolProvider) client() (TKEAPI, error) {
 		return p.Client, nil
 	}
 	return NewTKEClient(TKEConfig{Region: p.Config.Region, SecretID: p.Config.SecretID, SecretKey: p.Config.SecretKey})
-}
-
-func parseJSONMap(value string) (map[string]any, error) {
-	result := map[string]any{}
-	if err := json.Unmarshal([]byte(value), &result); err != nil {
-		return nil, ErrInvalidNodePoolJSON
-	}
-	return result, nil
 }
 
 func defaultString(value, fallback string) string {
@@ -229,4 +262,24 @@ func nodePoolName(computeID string) string {
 		return "opl-workspace"
 	}
 	return "opl-" + computeID
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func stringsToPtrs(values []string) []*string {
+	result := make([]*string, 0, len(values))
+	for _, value := range values {
+		result = append(result, common.StringPtr(value))
+	}
+	return result
 }
