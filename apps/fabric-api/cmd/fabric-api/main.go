@@ -113,6 +113,7 @@ func startWorker(ctx context.Context, cfg config.Config, store *postgres.Store) 
 			Client:               client,
 			Namespace:            cfg.KubernetesNamespace,
 			WorkspaceImage:       cfg.WorkspaceImage,
+			ImagePullSecretName:  cfg.ImagePullSecretName,
 			StorageClassName:     cfg.StorageClass,
 			WorkspaceDomain:      cfg.WorkspaceDomain,
 			IngressClassName:     cfg.IngressClass,

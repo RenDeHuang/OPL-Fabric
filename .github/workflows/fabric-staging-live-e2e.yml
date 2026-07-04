@@ -19,7 +19,7 @@ on:
       provider_instance_type:
         description: "Tencent CVM instance type for the live workspace compute"
         required: false
-        default: "SA5.LARGE4"
+        default: "SA5.MEDIUM4"
         type: string
       image_pull_secret_source_namespace:
         description: "Namespace to copy tcr-pull-secret from during staging bootstrap"

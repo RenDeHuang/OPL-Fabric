@@ -22,6 +22,7 @@ type Provider struct {
 	Client               kubernetes.Interface
 	Namespace            string
 	WorkspaceImage       string
+	ImagePullSecretName  string
 	StorageClassName     string
 	WorkspaceDomain      string
 	IngressClassName     string
@@ -141,6 +142,8 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 				ObjectMeta: metav1.ObjectMeta{Labels: labels, Annotations: annotations},
 				Spec: corev1.PodSpec{
 					AutomountServiceAccountToken: ptr(false),
+					ImagePullSecrets:             p.imagePullSecrets(),
+					NodeSelector:                 computeNodeSelector(input),
 					Containers: []corev1.Container{{
 						Name:  "workspace",
 						Image: p.WorkspaceImage,
@@ -415,6 +418,23 @@ func resourceList(input CreateComputeInput) corev1.ResourceList {
 		resources[corev1.ResourceMemory] = resource.MustParse(fmt.Sprintf("%dGi", input.MemoryGB))
 	}
 	return resources
+}
+
+func (p Provider) imagePullSecrets() []corev1.LocalObjectReference {
+	if p.ImagePullSecretName == "" {
+		return nil
+	}
+	return []corev1.LocalObjectReference{{Name: p.ImagePullSecretName}}
+}
+
+func computeNodeSelector(input CreateComputeInput) map[string]string {
+	if input.NodePoolID == "" || input.ID == "" {
+		return nil
+	}
+	if input.IsolationMode != "dedicated_nodepool" && input.CapacityPoolID != "dedicated-nodepool-template" {
+		return nil
+	}
+	return map[string]string{"oplfabric.cn/compute-id": input.ID}
 }
 
 func (p Provider) workspaceWebUIPort() int32 {

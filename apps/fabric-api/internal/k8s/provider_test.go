@@ -19,7 +19,7 @@ import (
 
 func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace-image:latest"}
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace-image:latest", ImagePullSecretName: "tcr-pull-secret"}
 
 	result, err := provider.CreateCompute(context.Background(), CreateComputeInput{
 		ID:              "compute-1",
@@ -48,6 +48,9 @@ func TestCreateComputeCreatesDeploymentAndService(t *testing.T) {
 	}
 	if deploy.Annotations["oplcloud.cn/compute-id"] != "compute-1" {
 		t.Fatalf("raw compute id annotation missing")
+	}
+	if len(deploy.Spec.Template.Spec.ImagePullSecrets) != 1 || deploy.Spec.Template.Spec.ImagePullSecrets[0].Name != "tcr-pull-secret" {
+		t.Fatalf("image pull secrets = %+v, want tcr-pull-secret", deploy.Spec.Template.Spec.ImagePullSecrets)
 	}
 	if deploy.Spec.Template.Spec.AutomountServiceAccountToken == nil || *deploy.Spec.Template.Spec.AutomountServiceAccountToken {
 		t.Fatalf("automount service account token should be false")
@@ -200,6 +203,9 @@ func TestCreateComputeCarriesCapacityBoundaryMetadata(t *testing.T) {
 		if deploy.Annotations[key] != want {
 			t.Fatalf("annotation %s = %q, want %q", key, deploy.Annotations[key], want)
 		}
+	}
+	if deploy.Spec.Template.Spec.NodeSelector["oplfabric.cn/compute-id"] != "compute-capacity" {
+		t.Fatalf("node selector = %+v, want compute label binding", deploy.Spec.Template.Spec.NodeSelector)
 	}
 
 	env := map[string]string{}

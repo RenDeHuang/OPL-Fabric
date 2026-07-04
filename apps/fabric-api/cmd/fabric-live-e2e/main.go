@@ -122,6 +122,7 @@ func run(ctx context.Context) error {
 			Client:               k8sClient,
 			Namespace:            cfg.KubernetesNamespace,
 			WorkspaceImage:       cfg.WorkspaceImage,
+			ImagePullSecretName:  cfg.ImagePullSecretName,
 			StorageClassName:     cfg.StorageClass,
 			WorkspaceDomain:      cfg.WorkspaceDomain,
 			IngressClassName:     cfg.IngressClass,
