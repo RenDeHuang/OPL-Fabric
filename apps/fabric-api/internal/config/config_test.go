@@ -19,6 +19,7 @@ func TestLoadReadsFabricConfigDirAndWorkspaceDefaults(t *testing.T) {
 	t.Setenv("OPL_TKE_NODEPOOL_AUTOSCALING_GROUP_PARA_JSON", `{"MinSize":0,"MaxSize":3}`)
 	t.Setenv("OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON", `{"SystemDisk":{"DiskType":"CLOUD_BSSD"}}`)
 	t.Setenv("OPL_TKE_INSTANCE_CHARGE_TYPE", "POSTPAID_BY_HOUR")
+	t.Setenv("OPL_STAGING_E2E_ALLOW_LIVE", "true")
 	t.Setenv("OPL_CODEX_MODEL", "gpt-5.5")
 	t.Setenv("OPL_CODEX_REASONING_EFFORT", "xhigh")
 	t.Setenv("OPL_CODEX_BASE_URL", "https://gflabtoken.cn/v1")
@@ -43,6 +44,9 @@ func TestLoadReadsFabricConfigDirAndWorkspaceDefaults(t *testing.T) {
 	}
 	if cfg.TKENodePoolAutoscalingJSON == "" || cfg.TKENodePoolLaunchJSON == "" {
 		t.Fatalf("TKE node pool JSON inputs not loaded")
+	}
+	if cfg.StagingE2EAllowLive != "true" {
+		t.Fatalf("StagingE2EAllowLive = %q", cfg.StagingE2EAllowLive)
 	}
 	if cfg.CodexAPIKey != "secret" {
 		t.Fatalf("CodexAPIKey not loaded")
@@ -75,5 +79,8 @@ func TestLoadUsesProductionCompatibleDefaults(t *testing.T) {
 	}
 	if cfg.TKEAllowNodePoolMutation != "true" {
 		t.Fatalf("TKEAllowNodePoolMutation = %q", cfg.TKEAllowNodePoolMutation)
+	}
+	if cfg.StagingE2EAllowLive != "false" {
+		t.Fatalf("StagingE2EAllowLive = %q", cfg.StagingE2EAllowLive)
 	}
 }

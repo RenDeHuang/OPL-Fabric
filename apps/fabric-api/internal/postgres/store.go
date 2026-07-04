@@ -125,6 +125,18 @@ WHERE id = $1
 	return row, err
 }
 
+func (s *Store) UpdateOperationState(ctx context.Context, id, state string) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	_, err := s.pool.Exec(ctx, `
+UPDATE fabric_operations
+SET state = $2, updated_at = now()
+WHERE id = $1
+`, id, state)
+	return err
+}
+
 func (s *Store) CreateStorageVolume(ctx context.Context, row StorageVolumeRow) error {
 	if s == nil || s.pool == nil {
 		return ErrStoreNotOpen
@@ -134,6 +146,31 @@ INSERT INTO storage_volumes (id, owner_account_id, product_preset_id, state, pro
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
 `, row.ID, row.OwnerAccountID, row.ProductPresetID, row.State, row.ProviderRef, row.SizeGB, row.Retained)
+	return err
+}
+
+func (s *Store) GetStorageVolume(ctx context.Context, id string) (StorageVolumeRow, error) {
+	if s == nil || s.pool == nil {
+		return StorageVolumeRow{}, ErrStoreNotOpen
+	}
+	var row StorageVolumeRow
+	err := s.pool.QueryRow(ctx, `
+SELECT id, owner_account_id, product_preset_id, state, provider_ref, size_gb, retained
+FROM storage_volumes
+WHERE id = $1
+`, id).Scan(&row.ID, &row.OwnerAccountID, &row.ProductPresetID, &row.State, &row.ProviderRef, &row.SizeGB, &row.Retained)
+	return row, err
+}
+
+func (s *Store) UpdateStorageVolume(ctx context.Context, row StorageVolumeRow) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	_, err := s.pool.Exec(ctx, `
+UPDATE storage_volumes
+SET state = $2, provider_ref = $3, retained = $4, updated_at = now()
+WHERE id = $1
+`, row.ID, row.State, row.ProviderRef, row.Retained)
 	return err
 }
 
@@ -149,6 +186,31 @@ ON CONFLICT (id) DO NOTHING
 	return err
 }
 
+func (s *Store) GetComputeResource(ctx context.Context, id string) (ComputeResourceRow, error) {
+	if s == nil || s.pool == nil {
+		return ComputeResourceRow{}, ErrStoreNotOpen
+	}
+	var row ComputeResourceRow
+	err := s.pool.QueryRow(ctx, `
+SELECT id, owner_account_id, product_preset_id, compute_shape_json::text, provider_instance_type, capacity_pool_id, isolation_mode, node_pool_id, runtime_ref, state, provider_ref
+FROM compute_resources
+WHERE id = $1
+`, id).Scan(&row.ID, &row.OwnerAccountID, &row.ProductPresetID, &row.ComputeShapeJSON, &row.ProviderInstanceType, &row.CapacityPoolID, &row.IsolationMode, &row.NodePoolID, &row.RuntimeRef, &row.State, &row.ProviderRef)
+	return row, err
+}
+
+func (s *Store) UpdateComputeResource(ctx context.Context, row ComputeResourceRow) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	_, err := s.pool.Exec(ctx, `
+UPDATE compute_resources
+SET node_pool_id = $2, runtime_ref = $3, state = $4, provider_ref = $5, updated_at = now()
+WHERE id = $1
+`, row.ID, row.NodePoolID, row.RuntimeRef, row.State, row.ProviderRef)
+	return err
+}
+
 func (s *Store) CreateStorageAttachment(ctx context.Context, row StorageAttachmentRow) error {
 	if s == nil || s.pool == nil {
 		return ErrStoreNotOpen
@@ -161,6 +223,31 @@ ON CONFLICT (id) DO NOTHING
 	return err
 }
 
+func (s *Store) GetStorageAttachment(ctx context.Context, id string) (StorageAttachmentRow, error) {
+	if s == nil || s.pool == nil {
+		return StorageAttachmentRow{}, ErrStoreNotOpen
+	}
+	var row StorageAttachmentRow
+	err := s.pool.QueryRow(ctx, `
+SELECT id, owner_account_id, compute_id, storage_id, state, mount_path, provider_ref
+FROM storage_attachments
+WHERE id = $1
+`, id).Scan(&row.ID, &row.OwnerAccountID, &row.ComputeID, &row.StorageID, &row.State, &row.MountPath, &row.ProviderRef)
+	return row, err
+}
+
+func (s *Store) UpdateStorageAttachment(ctx context.Context, row StorageAttachmentRow) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	_, err := s.pool.Exec(ctx, `
+UPDATE storage_attachments
+SET state = $2, mount_path = $3, provider_ref = $4, updated_at = now()
+WHERE id = $1
+`, row.ID, row.State, row.MountPath, row.ProviderRef)
+	return err
+}
+
 func (s *Store) CreateWorkspaceEntry(ctx context.Context, row WorkspaceEntryRow) error {
 	if s == nil || s.pool == nil {
 		return ErrStoreNotOpen
@@ -170,6 +257,31 @@ INSERT INTO workspace_entries (id, owner_account_id, workspace_id, attachment_id
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
 `, row.ID, row.OwnerAccountID, row.WorkspaceID, row.AttachmentID, row.State, row.Host, row.Path)
+	return err
+}
+
+func (s *Store) GetWorkspaceEntry(ctx context.Context, id string) (WorkspaceEntryRow, error) {
+	if s == nil || s.pool == nil {
+		return WorkspaceEntryRow{}, ErrStoreNotOpen
+	}
+	var row WorkspaceEntryRow
+	err := s.pool.QueryRow(ctx, `
+SELECT id, owner_account_id, workspace_id, attachment_id, state, host, path
+FROM workspace_entries
+WHERE id = $1
+`, id).Scan(&row.ID, &row.OwnerAccountID, &row.WorkspaceID, &row.AttachmentID, &row.State, &row.Host, &row.Path)
+	return row, err
+}
+
+func (s *Store) UpdateWorkspaceEntry(ctx context.Context, row WorkspaceEntryRow) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	_, err := s.pool.Exec(ctx, `
+UPDATE workspace_entries
+SET state = $2, host = $3, path = $4, updated_at = now()
+WHERE id = $1
+`, row.ID, row.State, row.Host, row.Path)
 	return err
 }
 

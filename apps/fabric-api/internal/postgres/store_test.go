@@ -87,4 +87,31 @@ func TestNilStoreResourceMethodsReturnError(t *testing.T) {
 	if err := store.CreateWorkspaceEntry(ctx, WorkspaceEntryRow{}); err != ErrStoreNotOpen {
 		t.Fatalf("CreateWorkspaceEntry error = %v, want %v", err, ErrStoreNotOpen)
 	}
+	if err := store.UpdateOperationState(ctx, "op-1", "applying"); err != ErrStoreNotOpen {
+		t.Fatalf("UpdateOperationState error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if _, err := store.GetStorageVolume(ctx, "storage-1"); err != ErrStoreNotOpen {
+		t.Fatalf("GetStorageVolume error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.UpdateStorageVolume(ctx, StorageVolumeRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("UpdateStorageVolume error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if _, err := store.GetComputeResource(ctx, "compute-1"); err != ErrStoreNotOpen {
+		t.Fatalf("GetComputeResource error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.UpdateComputeResource(ctx, ComputeResourceRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("UpdateComputeResource error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if _, err := store.GetStorageAttachment(ctx, "attach-1"); err != ErrStoreNotOpen {
+		t.Fatalf("GetStorageAttachment error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.UpdateStorageAttachment(ctx, StorageAttachmentRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("UpdateStorageAttachment error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if _, err := store.GetWorkspaceEntry(ctx, "entry-1"); err != ErrStoreNotOpen {
+		t.Fatalf("GetWorkspaceEntry error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.UpdateWorkspaceEntry(ctx, WorkspaceEntryRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("UpdateWorkspaceEntry error = %v, want %v", err, ErrStoreNotOpen)
+	}
 }

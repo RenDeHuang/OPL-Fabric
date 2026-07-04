@@ -8,6 +8,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -292,6 +293,171 @@ func TestCreateComputeAddsCodexSecretEnvWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCreateStorageVolumeCreatesPVC(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-fabric", StorageClassName: "cbs"}
+
+	result, err := provider.CreateStorageVolume(context.Background(), CreateStorageVolumeInput{
+		ID:     "storage-1",
+		SizeGB: 20,
+	})
+	if err != nil {
+		t.Fatalf("CreateStorageVolume: %v", err)
+	}
+
+	name := strings.TrimPrefix(result.ProviderRef, "pvc/")
+	pvc, err := client.CoreV1().PersistentVolumeClaims("opl-fabric").Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("pvc missing: %v", err)
+	}
+	if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != "cbs" {
+		t.Fatalf("storage class = %v, want cbs", pvc.Spec.StorageClassName)
+	}
+	if pvc.Spec.Resources.Requests.Storage().String() != "20Gi" {
+		t.Fatalf("storage request = %s, want 20Gi", pvc.Spec.Resources.Requests.Storage())
+	}
+}
+
+func TestAttachStoragePatchesDeploymentVolumeMount(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace:latest"}
+	compute, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-1"})
+	if err != nil {
+		t.Fatalf("CreateCompute: %v", err)
+	}
+	storage, err := provider.CreateStorageVolume(context.Background(), CreateStorageVolumeInput{ID: "storage-1", SizeGB: 10})
+	if err != nil {
+		t.Fatalf("CreateStorageVolume: %v", err)
+	}
+
+	result, err := provider.AttachStorage(context.Background(), AttachStorageInput{
+		ID:         "attach-1",
+		ComputeRef: compute.ProviderRef,
+		StorageRef: storage.ProviderRef,
+		MountPath:  "/data",
+		SubPath:    "data",
+	})
+	if err != nil {
+		t.Fatalf("AttachStorage: %v", err)
+	}
+
+	name := strings.TrimPrefix(compute.ProviderRef, "deployment/")
+	deploy, err := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("deployment missing: %v", err)
+	}
+	container := deploy.Spec.Template.Spec.Containers[0]
+	if len(container.VolumeMounts) != 1 || container.VolumeMounts[0].MountPath != "/data" {
+		t.Fatalf("volume mounts = %+v", container.VolumeMounts)
+	}
+	if len(deploy.Spec.Template.Spec.Volumes) != 1 || deploy.Spec.Template.Spec.Volumes[0].PersistentVolumeClaim.ClaimName != strings.TrimPrefix(storage.ProviderRef, "pvc/") {
+		t.Fatalf("volumes = %+v", deploy.Spec.Template.Spec.Volumes)
+	}
+	if !strings.HasPrefix(result.ProviderRef, "deployment/") || !strings.Contains(result.ProviderRef, ":pvc/") {
+		t.Fatalf("provider ref = %q", result.ProviderRef)
+	}
+}
+
+func TestCreateWorkspaceEntryCreatesGatewayIngressPath(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceDomain: "workspace.medopl.cn", IngressClassName: "qcloud"}
+
+	err := provider.CreateWorkspaceEntry(context.Background(), CreateWorkspaceEntryInput{
+		ID:          "entry-1",
+		WorkspaceID: "ws-1",
+		Host:        "workspace.medopl.cn",
+		Path:        "/w/ws-1/",
+		ServiceRef:  "service/opl-compute-1",
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkspaceEntry: %v", err)
+	}
+
+	ing, err := client.NetworkingV1().Ingresses("opl-fabric").Get(context.Background(), "opl-fabric-workspace-gateway", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("ingress missing: %v", err)
+	}
+	if ing.Spec.IngressClassName == nil || *ing.Spec.IngressClassName != "qcloud" {
+		t.Fatalf("ingress class = %v, want qcloud", ing.Spec.IngressClassName)
+	}
+	path := ing.Spec.Rules[0].IngressRuleValue.HTTP.Paths[0]
+	if path.Path != "/w/ws-1/" || path.Backend.Service.Name != "opl-compute-1" || path.Backend.Service.Port.Number != 3000 {
+		t.Fatalf("ingress path = %+v", path)
+	}
+}
+
+func TestDetachStorageRemovesDeploymentVolumeMount(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace:latest"}
+	compute, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-1"})
+	if err != nil {
+		t.Fatalf("CreateCompute: %v", err)
+	}
+	storage, err := provider.CreateStorageVolume(context.Background(), CreateStorageVolumeInput{ID: "storage-1", SizeGB: 10})
+	if err != nil {
+		t.Fatalf("CreateStorageVolume: %v", err)
+	}
+	attach, err := provider.AttachStorage(context.Background(), AttachStorageInput{ID: "attach-1", ComputeRef: compute.ProviderRef, StorageRef: storage.ProviderRef, MountPath: "/data"})
+	if err != nil {
+		t.Fatalf("AttachStorage: %v", err)
+	}
+
+	if err := provider.DetachStorage(context.Background(), DetachStorageInput{ProviderRef: attach.ProviderRef}); err != nil {
+		t.Fatalf("DetachStorage: %v", err)
+	}
+
+	name := strings.TrimPrefix(compute.ProviderRef, "deployment/")
+	deploy, err := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("deployment missing: %v", err)
+	}
+	if len(deploy.Spec.Template.Spec.Containers[0].VolumeMounts) != 0 || len(deploy.Spec.Template.Spec.Volumes) != 0 {
+		t.Fatalf("storage still attached: mounts=%+v volumes=%+v", deploy.Spec.Template.Spec.Containers[0].VolumeMounts, deploy.Spec.Template.Spec.Volumes)
+	}
+}
+
+func TestDestroyComputeDeletesDeploymentServiceAndSecret(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace:latest", CodexAPIKey: "secret"}
+	compute, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-1"})
+	if err != nil {
+		t.Fatalf("CreateCompute: %v", err)
+	}
+
+	if err := provider.DestroyCompute(context.Background(), DestroyComputeInput{ProviderRef: compute.ProviderRef, RuntimeRef: compute.ServiceRef}); err != nil {
+		t.Fatalf("DestroyCompute: %v", err)
+	}
+
+	name := strings.TrimPrefix(compute.ProviderRef, "deployment/")
+	if _, err := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), name, metav1.GetOptions{}); err == nil {
+		t.Fatal("deployment should be deleted")
+	}
+	if _, err := client.CoreV1().Services("opl-fabric").Get(context.Background(), name, metav1.GetOptions{}); err == nil {
+		t.Fatal("service should be deleted")
+	}
+	if _, err := client.CoreV1().Secrets("opl-fabric").Get(context.Background(), name+"-env", metav1.GetOptions{}); err == nil {
+		t.Fatal("secret should be deleted")
+	}
+}
+
+func TestDestroyStorageDeletesPVCOnlyWhenRequested(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{Client: client, Namespace: "opl-fabric", StorageClassName: "cbs"}
+	storage, err := provider.CreateStorageVolume(context.Background(), CreateStorageVolumeInput{ID: "storage-1", SizeGB: 10})
+	if err != nil {
+		t.Fatalf("CreateStorageVolume: %v", err)
+	}
+
+	if err := provider.DestroyStorage(context.Background(), DestroyStorageInput{ProviderRef: storage.ProviderRef}); err != nil {
+		t.Fatalf("DestroyStorage: %v", err)
+	}
+
+	if _, err := client.CoreV1().PersistentVolumeClaims("opl-fabric").Get(context.Background(), strings.TrimPrefix(storage.ProviderRef, "pvc/"), metav1.GetOptions{}); err == nil {
+		t.Fatal("pvc should be deleted")
+	}
+}
+
 var _ = appsv1.Deployment{}
 var _ = corev1.Service{}
+var _ = networkingv1.Ingress{}
 var _ kubernetes.Interface = fake.NewSimpleClientset()

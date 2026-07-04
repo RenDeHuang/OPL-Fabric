@@ -37,6 +37,7 @@
     "OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON": { "value": "" },
     "OPL_TKE_INSTANCE_CHARGE_TYPE": { "value": "POSTPAID_BY_HOUR" },
     "OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER": { "value": "" },
-    "OPL_TKE_ALLOW_NODEPOOL_MUTATION": { "value": "true" }
+    "OPL_TKE_ALLOW_NODEPOOL_MUTATION": { "value": "true" },
+    "OPL_STAGING_E2E_ALLOW_LIVE": { "value": "false" }
   }
 }

@@ -30,6 +30,7 @@ type Config struct {
 	TKEInstanceChargeType       string
 	TKENodePoolDesiredPodNumber string
 	TKEAllowNodePoolMutation    string
+	StagingE2EAllowLive         string
 	OperatorToken               string
 	CodexModel                  string
 	CodexReasoningEffort        string
@@ -69,6 +70,7 @@ func Load() Config {
 		TKEInstanceChargeType:       env("OPL_TKE_INSTANCE_CHARGE_TYPE", "POSTPAID_BY_HOUR"),
 		TKENodePoolDesiredPodNumber: os.Getenv("OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER"),
 		TKEAllowNodePoolMutation:    env("OPL_TKE_ALLOW_NODEPOOL_MUTATION", "true"),
+		StagingE2EAllowLive:         env("OPL_STAGING_E2E_ALLOW_LIVE", "false"),
 		OperatorToken:               os.Getenv("OPL_OPERATOR_TOKEN"),
 		CodexModel:                  env("OPL_CODEX_MODEL", "gpt-5.5"),
 		CodexReasoningEffort:        env("OPL_CODEX_REASONING_EFFORT", "xhigh"),
