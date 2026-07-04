@@ -135,6 +135,9 @@ jobs:
           OPL_FABRIC_WORKER_ENABLED: "false"
           OPL_TKE_ALLOW_NODEPOOL_MUTATION: "false"
           OPL_STAGING_E2E_ALLOW_LIVE: "false"
+          OPL_LIVE_E2E_BOOTSTRAP_NAMESPACE: "false"
+          OPL_LIVE_E2E_BOOTSTRAP_IMAGE_PULL_SECRET: "false"
+          OPL_LIVE_E2E_IMAGE_PULL_SECRET_SOURCE_NAMESPACE: ""
         run: npm test
 
       - name: Run Fabric staging live e2e runner
