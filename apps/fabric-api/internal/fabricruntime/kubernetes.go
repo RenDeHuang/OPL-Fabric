@@ -10,6 +10,24 @@ import (
 
 type KubernetesRuntime struct {
 	Provider fabrick8s.Provider
+	Capacity CapacityProvider
+}
+
+type CapacityProvider interface {
+	EnsureNodePool(context.Context, CapacityNodePoolRequest) (CapacityNodePoolResult, error)
+	VerifyNodePool(context.Context, string) (bool, error)
+	DeleteNodePool(context.Context, string) error
+}
+
+type CapacityNodePoolRequest struct {
+	ComputeID                 string
+	WorkspaceID               string
+	RequestedComputeShapeJSON string
+	ProviderInstanceType      string
+}
+
+type CapacityNodePoolResult struct {
+	NodePoolID string
 }
 
 func (r KubernetesRuntime) CreateStorageVolume(ctx context.Context, row postgres.StorageVolumeRow) (orchestrator.RuntimeStorageResult, error) {
@@ -18,6 +36,27 @@ func (r KubernetesRuntime) CreateStorageVolume(ctx context.Context, row postgres
 }
 
 func (r KubernetesRuntime) CreateCompute(ctx context.Context, row postgres.ComputeResourceRow) (orchestrator.RuntimeComputeResult, error) {
+	nodePoolID := row.NodePoolID
+	if r.requiresDedicatedNodePool(row) {
+		if nodePoolID == "" {
+			result, err := r.Capacity.EnsureNodePool(ctx, CapacityNodePoolRequest{
+				ComputeID:                 row.ID,
+				RequestedComputeShapeJSON: row.ComputeShapeJSON,
+				ProviderInstanceType:      row.ProviderInstanceType,
+			})
+			if err != nil {
+				return orchestrator.RuntimeComputeResult{}, err
+			}
+			nodePoolID = result.NodePoolID
+		}
+		verified, err := r.Capacity.VerifyNodePool(ctx, nodePoolID)
+		if err != nil {
+			return orchestrator.RuntimeComputeResult{}, err
+		}
+		if !verified {
+			return orchestrator.RuntimeComputeResult{}, ErrNodePoolNotVerified
+		}
+	}
 	result, err := r.Provider.CreateCompute(ctx, fabrick8s.CreateComputeInput{
 		ID:                   row.ID,
 		ProductPresetID:      row.ProductPresetID,
@@ -25,10 +64,10 @@ func (r KubernetesRuntime) CreateCompute(ctx context.Context, row postgres.Compu
 		ProviderInstanceType: row.ProviderInstanceType,
 		CapacityPoolID:       row.CapacityPoolID,
 		IsolationMode:        row.IsolationMode,
-		NodePoolID:           row.NodePoolID,
+		NodePoolID:           nodePoolID,
 		RuntimeRef:           row.RuntimeRef,
 	})
-	return orchestrator.RuntimeComputeResult{ProviderRef: result.ProviderRef, RuntimeRef: result.ServiceRef}, err
+	return orchestrator.RuntimeComputeResult{ProviderRef: result.ProviderRef, RuntimeRef: result.ServiceRef, NodePoolID: nodePoolID}, err
 }
 
 func (r KubernetesRuntime) AttachStorage(ctx context.Context, row postgres.StorageAttachmentRow) (orchestrator.RuntimeAttachmentResult, error) {
@@ -53,7 +92,13 @@ func (r KubernetesRuntime) CreateWorkspaceEntry(ctx context.Context, row postgre
 }
 
 func (r KubernetesRuntime) DestroyCompute(ctx context.Context, row postgres.ComputeResourceRow) error {
-	return r.Provider.DestroyCompute(ctx, fabrick8s.DestroyComputeInput{ProviderRef: row.ProviderRef, RuntimeRef: row.RuntimeRef})
+	if err := r.Provider.DestroyCompute(ctx, fabrick8s.DestroyComputeInput{ProviderRef: row.ProviderRef, RuntimeRef: row.RuntimeRef}); err != nil {
+		return err
+	}
+	if row.NodePoolID != "" && r.Capacity != nil {
+		return r.Capacity.DeleteNodePool(ctx, row.NodePoolID)
+	}
+	return nil
 }
 
 func (r KubernetesRuntime) DestroyStorage(ctx context.Context, row postgres.StorageVolumeRow) error {
@@ -69,6 +114,19 @@ func defaultString(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+var ErrNodePoolNotVerified = errNodePoolNotVerified{}
+
+type errNodePoolNotVerified struct{}
+
+func (errNodePoolNotVerified) Error() string { return "nodepool_not_verified" }
+
+func (r KubernetesRuntime) requiresDedicatedNodePool(row postgres.ComputeResourceRow) bool {
+	if r.Capacity == nil {
+		return false
+	}
+	return row.IsolationMode == "dedicated_nodepool" || row.CapacityPoolID == "dedicated-nodepool-template"
 }
 
 func splitProviderRefs(providerRef, computeID, storageID string) (computeRef, storageRef string) {

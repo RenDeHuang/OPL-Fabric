@@ -41,6 +41,7 @@ type RuntimeStorageResult struct {
 type RuntimeComputeResult struct {
 	ProviderRef string
 	RuntimeRef  string
+	NodePoolID  string
 }
 
 type RuntimeAttachmentResult struct {
@@ -125,6 +126,7 @@ func (o Orchestrator) applyComputeResource(ctx context.Context, id string) error
 	}
 	row.ProviderRef = result.ProviderRef
 	row.RuntimeRef = result.RuntimeRef
+	row.NodePoolID = result.NodePoolID
 	row.State = "running"
 	return o.Store.UpdateComputeResource(ctx, row)
 }

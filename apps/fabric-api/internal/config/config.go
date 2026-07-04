@@ -74,7 +74,7 @@ func Load() Config {
 		TKENodePoolLaunchJSON:       os.Getenv("OPL_TKE_NODEPOOL_LAUNCH_CONFIGURE_PARA_JSON"),
 		TKEInstanceChargeType:       env("OPL_TKE_INSTANCE_CHARGE_TYPE", "POSTPAID_BY_HOUR"),
 		TKENodePoolDesiredPodNumber: os.Getenv("OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER"),
-		TKEAllowNodePoolMutation:    env("OPL_TKE_ALLOW_NODEPOOL_MUTATION", "true"),
+		TKEAllowNodePoolMutation:    env("OPL_TKE_ALLOW_NODEPOOL_MUTATION", "false"),
 		StagingE2EAllowLive:         env("OPL_STAGING_E2E_ALLOW_LIVE", "false"),
 		OperatorToken:               os.Getenv("OPL_OPERATOR_TOKEN"),
 		CodexModel:                  env("OPL_CODEX_MODEL", "gpt-5.5"),

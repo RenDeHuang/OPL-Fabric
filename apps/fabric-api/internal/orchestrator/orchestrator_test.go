@@ -57,6 +57,22 @@ func TestApplyComputeOperationCreatesRuntimeAndMarksSucceeded(t *testing.T) {
 	}
 }
 
+func TestApplyComputeOperationPersistsNodePoolID(t *testing.T) {
+	store := newMemoryStore()
+	store.operations["op-1"] = postgres.OperationRow{ID: "op-1", ResourceKind: "compute_resource", ResourceID: "compute-1", State: "accepted"}
+	store.compute["compute-1"] = postgres.ComputeResourceRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating", IsolationMode: "dedicated_nodepool"}
+	runtime := &recordingRuntime{nodePoolID: "np-1"}
+	orch := Orchestrator{Store: store, Runtime: runtime}
+
+	if _, err := orch.Apply(context.Background(), "op-1"); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	if store.compute["compute-1"].NodePoolID != "np-1" {
+		t.Fatalf("NodePoolID = %q, want np-1", store.compute["compute-1"].NodePoolID)
+	}
+}
+
 func TestApplyAttachmentOperationMountsStorage(t *testing.T) {
 	store := newMemoryStore()
 	store.operations["op-1"] = postgres.OperationRow{ID: "op-1", ResourceKind: "storage_attachment", ResourceID: "attach-1", State: "accepted"}
@@ -303,6 +319,7 @@ func (s *memoryStore) UpdateWorkspace(_ context.Context, row postgres.WorkspaceR
 type recordingRuntime struct {
 	err                      error
 	computeErr               error
+	nodePoolID               string
 	calls                    []string
 	createdStorageID         string
 	createdComputeID         string
@@ -332,7 +349,7 @@ func (r *recordingRuntime) CreateCompute(_ context.Context, row postgres.Compute
 	}
 	r.calls = append(r.calls, "compute:"+row.ID)
 	r.createdComputeID = row.ID
-	return RuntimeComputeResult{ProviderRef: "deployment/" + row.ID, RuntimeRef: "service/" + row.ID}, nil
+	return RuntimeComputeResult{ProviderRef: "deployment/" + row.ID, RuntimeRef: "service/" + row.ID, NodePoolID: r.nodePoolID}, nil
 }
 
 func (r *recordingRuntime) AttachStorage(_ context.Context, row postgres.StorageAttachmentRow) (RuntimeAttachmentResult, error) {

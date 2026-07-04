@@ -11,6 +11,9 @@ func TestGateBlocksWhenRequiredCloudInputsAreMissing(t *testing.T) {
 	if result.Ready {
 		t.Fatal("gate should block with missing cloud inputs")
 	}
+	if result.Mode != "blocked" {
+		t.Fatalf("mode = %q, want blocked", result.Mode)
+	}
 	for _, key := range []string{
 		"TENCENT_DEPLOY_KUBECONFIG_REF",
 		"TENCENT_DEPLOY_CLUSTER_ID",
@@ -23,6 +26,7 @@ func TestGateBlocksWhenRequiredCloudInputsAreMissing(t *testing.T) {
 		"OPL_WORKSPACE_STORAGE_CLASS",
 		"OPL_INGRESS_CLASS",
 		"OPL_WORKSPACE_DOMAIN",
+		"OPL_WORKSPACE_IMAGE",
 		"OPL_IMAGE_PULL_SECRET_NAME",
 	} {
 		if !contains(result.Missing, key) {
@@ -35,6 +39,7 @@ func TestGateRequiresExplicitLiveMutationAllowance(t *testing.T) {
 	cfg := completeConfig()
 	cfg.AllowNodePoolMutation = true
 	cfg.AllowStagingE2E = false
+	cfg.WorkerEnabled = true
 
 	result := EvaluateGate(cfg)
 
@@ -43,6 +48,9 @@ func TestGateRequiresExplicitLiveMutationAllowance(t *testing.T) {
 	}
 	if !contains(result.Blockers, "staging_e2e_not_allowed") {
 		t.Fatalf("blockers = %v", result.Blockers)
+	}
+	if result.Mode != "blocked" {
+		t.Fatalf("mode = %q, want blocked", result.Mode)
 	}
 }
 
@@ -65,14 +73,34 @@ func TestGateAllowsLiveOnlyWhenBothFlagsAreExplicit(t *testing.T) {
 	cfg := completeConfig()
 	cfg.AllowNodePoolMutation = true
 	cfg.AllowStagingE2E = true
+	cfg.WorkerEnabled = true
 
 	result := EvaluateGate(cfg)
 
 	if !result.Ready {
 		t.Fatalf("live gate should be ready: %+v", result)
 	}
-	if result.Mode != "live_staging" {
-		t.Fatalf("mode = %q, want live_staging", result.Mode)
+	if result.Mode != "ready_for_live" {
+		t.Fatalf("mode = %q, want ready_for_live", result.Mode)
+	}
+}
+
+func TestGateBlocksLiveWhenWorkerIsNotEnabled(t *testing.T) {
+	cfg := completeConfig()
+	cfg.AllowNodePoolMutation = true
+	cfg.AllowStagingE2E = true
+	cfg.WorkerEnabled = false
+
+	result := EvaluateGate(cfg)
+
+	if result.Ready {
+		t.Fatal("gate should block live e2e without worker")
+	}
+	if !contains(result.Blockers, "fabric_worker_not_enabled") {
+		t.Fatalf("blockers = %v", result.Blockers)
+	}
+	if result.Mode != "blocked" {
+		t.Fatalf("mode = %q, want blocked", result.Mode)
 	}
 }
 
@@ -85,6 +113,7 @@ func completeConfig() Config {
 		StorageClass:            "cbs",
 		IngressClass:            "qcloud",
 		WorkspaceDomain:         "workspace.medopl.cn",
+		WorkspaceImage:          "tcr.example.com/opl/workspace:staging",
 		ImagePullSecretName:     "tcr-pull-secret",
 		TencentClusterID:        "cls-example",
 		TencentRegion:           "ap-guangzhou",

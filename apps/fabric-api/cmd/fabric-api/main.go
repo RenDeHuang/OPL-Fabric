@@ -15,6 +15,7 @@ import (
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/orchestrator"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/postgres"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/service"
+	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/tencentcloud"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/worker"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -104,24 +105,37 @@ func startWorker(ctx context.Context, cfg config.Config, store *postgres.Store) 
 	if err != nil {
 		return err
 	}
-	runtime := fabricruntime.KubernetesRuntime{Provider: fabrick8s.Provider{
-		Client:               client,
-		Namespace:            cfg.KubernetesNamespace,
-		WorkspaceImage:       cfg.WorkspaceImage,
-		StorageClassName:     cfg.StorageClass,
-		WorkspaceDomain:      cfg.WorkspaceDomain,
-		IngressClassName:     cfg.IngressClass,
-		WorkspaceWebUIPort:   parseInt32(cfg.WorkspaceWebUIPort, 3000),
-		WorkspaceDataDir:     cfg.WorkspaceDataDir,
-		WorkspaceProjectsDir: cfg.WorkspaceProjectsDir,
-		CodexHome:            cfg.CodexHome,
-		CodexModel:           cfg.CodexModel,
-		CodexReasoningEffort: cfg.CodexReasoningEffort,
-		CodexBaseURL:         cfg.CodexBaseURL,
-		CodexAPIKey:          cfg.CodexAPIKey,
-		CodexModelProvider:   cfg.CodexModelProvider,
-		CodexProviderName:    cfg.CodexProviderName,
-	}}
+	runtime := fabricruntime.KubernetesRuntime{
+		Provider: fabrick8s.Provider{
+			Client:               client,
+			Namespace:            cfg.KubernetesNamespace,
+			WorkspaceImage:       cfg.WorkspaceImage,
+			StorageClassName:     cfg.StorageClass,
+			WorkspaceDomain:      cfg.WorkspaceDomain,
+			IngressClassName:     cfg.IngressClass,
+			WorkspaceWebUIPort:   parseInt32(cfg.WorkspaceWebUIPort, 3000),
+			WorkspaceDataDir:     cfg.WorkspaceDataDir,
+			WorkspaceProjectsDir: cfg.WorkspaceProjectsDir,
+			CodexHome:            cfg.CodexHome,
+			CodexModel:           cfg.CodexModel,
+			CodexReasoningEffort: cfg.CodexReasoningEffort,
+			CodexBaseURL:         cfg.CodexBaseURL,
+			CodexAPIKey:          cfg.CodexAPIKey,
+			CodexModelProvider:   cfg.CodexModelProvider,
+			CodexProviderName:    cfg.CodexProviderName,
+		},
+		Capacity: capacityAdapter{provider: tencentcloud.NodePoolProvider{Config: tencentcloud.NodePoolResolverConfig{
+			ClusterID:          cfg.TencentDeployClusterID,
+			Region:             cfg.TencentTKERegion,
+			SecretID:           cfg.TencentMutationSecretID,
+			SecretKey:          cfg.TencentMutationSecretKey,
+			LaunchConfigJSON:   cfg.TKENodePoolLaunchJSON,
+			AutoscalingJSON:    cfg.TKENodePoolAutoscalingJSON,
+			InstanceChargeType: cfg.TKEInstanceChargeType,
+			DesiredPodNumber:   cfg.TKENodePoolDesiredPodNumber,
+			MutationAllowed:    parseBool(cfg.TKEAllowNodePoolMutation),
+		}}},
+	}
 	orch := orchestrator.Orchestrator{Store: store, Runtime: runtime}
 	w := worker.Worker{
 		Store:        store,
@@ -159,4 +173,33 @@ func parseInt(value string, fallback int) int {
 func parseInt32(value string, fallback int32) int32 {
 	parsed := parseInt(value, int(fallback))
 	return int32(parsed)
+}
+
+func parseBool(value string) bool {
+	parsed, err := strconv.ParseBool(value)
+	return err == nil && parsed
+}
+
+type capacityAdapter struct {
+	provider tencentcloud.NodePoolProvider
+}
+
+func (a capacityAdapter) EnsureNodePool(ctx context.Context, req fabricruntime.CapacityNodePoolRequest) (fabricruntime.CapacityNodePoolResult, error) {
+	result, err := a.provider.EnsureNodePool(ctx, tencentcloud.NodePoolRequest{
+		ComputeID:                 req.ComputeID,
+		WorkspaceID:               req.WorkspaceID,
+		RequestedComputeShapeJSON: req.RequestedComputeShapeJSON,
+	})
+	if err != nil {
+		return fabricruntime.CapacityNodePoolResult{}, err
+	}
+	return fabricruntime.CapacityNodePoolResult{NodePoolID: result.NodePoolID}, nil
+}
+
+func (a capacityAdapter) VerifyNodePool(ctx context.Context, nodePoolID string) (bool, error) {
+	return a.provider.VerifyNodePool(ctx, nodePoolID)
+}
+
+func (a capacityAdapter) DeleteNodePool(ctx context.Context, nodePoolID string) error {
+	return a.provider.DeleteNodePool(ctx, nodePoolID)
 }

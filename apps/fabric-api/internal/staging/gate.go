@@ -8,6 +8,7 @@ type Config struct {
 	StorageClass            string
 	IngressClass            string
 	WorkspaceDomain         string
+	WorkspaceImage          string
 	ImagePullSecretName     string
 	TencentClusterID        string
 	TencentRegion           string
@@ -20,6 +21,7 @@ type Config struct {
 	NodePoolAutoscalingJSON string
 	AllowNodePoolMutation   bool
 	AllowStagingE2E         bool
+	WorkerEnabled           bool
 }
 
 type Result struct {
@@ -43,6 +45,7 @@ func EvaluateGate(cfg Config) Result {
 	require("OPL_WORKSPACE_STORAGE_CLASS", cfg.StorageClass)
 	require("OPL_INGRESS_CLASS", cfg.IngressClass)
 	require("OPL_WORKSPACE_DOMAIN", cfg.WorkspaceDomain)
+	require("OPL_WORKSPACE_IMAGE", cfg.WorkspaceImage)
 	require("OPL_IMAGE_PULL_SECRET_NAME", cfg.ImagePullSecretName)
 	require("TENCENT_DEPLOY_CLUSTER_ID", cfg.TencentClusterID)
 	require("TENCENT_TKE_REGION", cfg.TencentRegion)
@@ -57,10 +60,18 @@ func EvaluateGate(cfg Config) Result {
 	blockers := []string{}
 	mode := "dry_run"
 	if cfg.AllowNodePoolMutation {
-		mode = "live_staging"
 		if !cfg.AllowStagingE2E {
 			blockers = append(blockers, "staging_e2e_not_allowed")
 		}
+		if !cfg.WorkerEnabled {
+			blockers = append(blockers, "fabric_worker_not_enabled")
+		}
+		if len(blockers) == 0 {
+			mode = "ready_for_live"
+		}
+	}
+	if len(missing) > 0 || len(blockers) > 0 {
+		mode = "blocked"
 	}
 	return Result{
 		Ready:    len(missing) == 0 && len(blockers) == 0,

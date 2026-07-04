@@ -15,8 +15,9 @@ Supported in the first implementation:
 - PostgreSQL schema.
 - PostgreSQL store methods and startup migration wiring.
 - Kubernetes provider boundary with fake-client tests for compute, PVC, storage attachment, workspace ingress entry, detach, and destroy.
-- Tencent Cloud SDK client boundary plus NodePool dry-plan resolver for TKE capacity operations.
-- Staging e2e validation gate that blocks live mutation unless explicit flags and required cloud inputs are present.
+- Tencent Cloud SDK client boundary plus live TKE NodePool create, verify, and delete provider behind an explicit mutation gate.
+- Staging e2e validation gate with `blocked`, `dry_run`, and `ready_for_live` modes.
+- Fake staging workspace-chain test that runs reservation -> worker -> orchestrator -> storage -> compute -> attach -> entry without touching cloud resources.
 - Operator console build.
 
 Not supported in the first implementation:
@@ -37,12 +38,12 @@ Remaining risks:
 - PostgreSQL coverage includes store method compilation and startup migration wiring, but not a live database migration and constraint test lane.
 - Production console hosting still needs explicit Fabric integration from OPL Cloud/Console. OPL Cloud now carries workspace gateway/proxy behavior in its Console server, while Fabric remains the storage/compute/attachment/entry API boundary.
 - The Kubernetes runtime provider now covers Deployment, Service, workspace Codex Secret, PVC, attachment mount, workspace ingress entry, detach, compute destroy, and PVC destroy with fake-client tests. Reconcile, status, watch behavior, and real-cluster validation remain future work.
-- The Tencent capacity provider boundary currently constructs a TKE SDK client and validates NodePool dry plans, but does not yet create, scale, or verify node pools.
+- The Tencent capacity provider now creates, verifies, and deletes TKE NodePools through the Tencent Cloud Go SDK when `OPL_TKE_ALLOW_NODEPOOL_MUTATION=true`. It is still gated by default and has not been exercised against the live staging cluster from this environment.
 - The deployment manifest has minimal RBAC for the current provider only; future read, watch, patch, and update flows must expand it deliberately.
 - OPL Cloud catalog sections for environment templates, connectors, and agent packages are not yet implemented in OPL Fabric.
 - OPL Cloud deployment contract fields for ingress, image pull secrets, TLS, Tencent registry, Codex runtime config, TKE node pool launch config, autoscaling config, and production diagnostics are not fully represented by the current deployment skeleton.
 - No real-cluster validation has run in this environment; current Kubernetes checks are fake-client or YAML structural checks.
-- No rollout was performed for Phase 3-7. Staging e2e remains blocked until live PostgreSQL, kubeconfig, TKE, TCR, storage class, ingress class, and explicit live mutation flags are verified.
-- Central config now records medopl-3 TKE and Codex workspace inputs plus the latest OPL Cloud Tencent node pool knobs, but provider behavior still needs full PVC, Secret, Ingress, attachment, Workspace entry, reconcile, and status implementation through Go client-go.
+- No rollout was performed for Phase 3-7. The default path is controlled dry-run. Live staging e2e remains blocked until live PostgreSQL, kubeconfig or in-cluster config, TKE, TCR, storage class, ingress class, Workspace image, worker enablement, and explicit live mutation flags are verified.
+- Central config records medopl-3 TKE and Codex workspace inputs plus the latest OPL Cloud Tencent node pool knobs. The Kubernetes provider covers the create/destroy primitives for the main chain with fake-client tests; reconcile, watch, status, and live readiness checks remain incomplete.
 - `OPL_CODEX_API_KEY` is optional until workspace Codex bootstrap is enabled for a published mutating compute API.
 - The latest OPL Cloud commit reverts its TKE NodePool goal work, so Fabric should continue with the Go client-go plus Tencent Cloud Go SDK split instead of importing OPL Cloud's current JavaScript provider/runtime approach.

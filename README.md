@@ -87,6 +87,18 @@ OPL Console should use the workspace route as the normal create path and use the
 
 The worker is disabled by default in local env examples and the Kubernetes skeleton. Enabling it in staging requires verified PostgreSQL, in-cluster Kubernetes access, storage class, ingress class, Workspace image, pull secrets, and explicit live readiness review.
 
+## Controlled Live Resource Mutation
+
+Fabric is the only service that should create or delete cloud resources for a Workspace. OPL Console calls Fabric APIs and polls operation/resource status. OPL Ledger records Fabric operation IDs, provider refs, evidence refs, cluster IDs, NodePool IDs, requester identity, and timestamps; it does not mutate cloud resources directly.
+
+Live resource mutation is intentionally gated:
+
+- `POST /api/fabric/workspaces` is the product create path. The worker executes storage -> compute -> attach -> entry.
+- Dedicated compute calls the Tencent Cloud Go SDK NodePool provider before Kubernetes compute creation and stores the returned NodePool ID on the compute row.
+- Shared-pool compute skips NodePool creation and uses the configured Kubernetes scheduling/runtime path.
+- Delete routes require confirmation and create accepted operations. Runtime deletion runs through Fabric so provider refs and retained storage policy stay auditable.
+- `OPL_TKE_ALLOW_NODEPOOL_MUTATION=false` is the safe default. Staging or production must explicitly set it to `true`, enable the worker, and pass the staging gate before live NodePool create/delete is allowed.
+
 In a second shell, run the operator console. The Vite dev server proxies `/api` to `http://127.0.0.1:8787` and injects the Bearer token from its server-side `OPL_OPERATOR_TOKEN` environment variable, so the token is not exposed through a browser `VITE_` variable.
 
 ```bash
@@ -104,7 +116,7 @@ OPL_OPERATOR_TOKEN=dev-operator-token npm --prefix apps/fabric-console run dev
 - Workspace defaults matching backend config: `OPL_WORKSPACE_IMAGE`, `OPL_WORKSPACE_DOMAIN`, and `OPL_WORKSPACE_STORAGE_CLASS`.
 - Worker defaults are present but disabled through `OPL_FABRIC_WORKER_ENABLED=false`.
 - Tencent capacity defaults are placeholders only: `TENCENT_TKE_REGION`, `TENCENT_DEPLOY_CLUSTER_ID`, TCR refs, and hourly node pool charge type. Real mutation credentials must come from Secret keys.
-- Staging NodePool mutation is explicitly allowed by `OPL_TKE_ALLOW_NODEPOOL_MUTATION=true`, but only the Tencent Cloud Go SDK resolver phase may use it.
+- NodePool mutation is explicitly disabled by `OPL_TKE_ALLOW_NODEPOOL_MUTATION=false`. Staging/prod overlays must opt in only after the gate reports `ready_for_live`.
 
 The manifest expects this placeholder Secret in the same namespace:
 

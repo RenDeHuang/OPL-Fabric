@@ -111,7 +111,7 @@ spec:
             - name: OPL_TKE_INSTANCE_CHARGE_TYPE
               value: POSTPAID_BY_HOUR
             - name: OPL_TKE_ALLOW_NODEPOOL_MUTATION
-              value: "true"
+              value: "false"
             - name: OPL_STAGING_E2E_ALLOW_LIVE
               value: "false"
             - name: OPL_CODEX_MODEL

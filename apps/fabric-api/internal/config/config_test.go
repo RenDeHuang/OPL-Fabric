@@ -85,7 +85,7 @@ func TestLoadUsesProductionCompatibleDefaults(t *testing.T) {
 	if cfg.TKEInstanceChargeType != "POSTPAID_BY_HOUR" {
 		t.Fatalf("TKEInstanceChargeType = %q", cfg.TKEInstanceChargeType)
 	}
-	if cfg.TKEAllowNodePoolMutation != "true" {
+	if cfg.TKEAllowNodePoolMutation != "false" {
 		t.Fatalf("TKEAllowNodePoolMutation = %q", cfg.TKEAllowNodePoolMutation)
 	}
 	if cfg.StagingE2EAllowLive != "false" {
