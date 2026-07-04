@@ -126,11 +126,14 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 		annotations["oplcloud.cn/provider-instance-type"] = input.ProviderInstanceType
 	}
 	codexSecretName := ""
+	codexSecretCreated := false
 	if secret := p.codexSecret(name, labels); secret != nil {
-		if _, err := p.Client.CoreV1().Secrets(p.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		created, err := p.ensureCodexSecret(ctx, secret)
+		if err != nil {
 			return CreateComputeResult{}, err
 		}
 		codexSecretName = secret.Name
+		codexSecretCreated = created
 	}
 
 	deploy := &appsv1.Deployment{
@@ -170,8 +173,8 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 			},
 		},
 	}
-	if _, err := p.Client.AppsV1().Deployments(p.Namespace).Create(ctx, deploy, metav1.CreateOptions{}); err != nil {
-		if codexSecretName != "" {
+	if err := p.ensureDeployment(ctx, deploy); err != nil {
+		if codexSecretCreated {
 			if deleteErr := p.Client.CoreV1().Secrets(p.Namespace).Delete(ctx, codexSecretName, metav1.DeleteOptions{}); deleteErr != nil {
 				return CreateComputeResult{}, errors.Join(err, fmt.Errorf("cleanup secret %q: %w", codexSecretName, deleteErr))
 			}
@@ -186,11 +189,11 @@ func (p Provider) CreateCompute(ctx context.Context, input CreateComputeInput) (
 			Ports:    []corev1.ServicePort{{Name: "http", Port: p.workspaceWebUIPort(), TargetPort: intstr.FromInt(int(p.workspaceWebUIPort()))}},
 		},
 	}
-	if _, err := p.Client.CoreV1().Services(p.Namespace).Create(ctx, service, metav1.CreateOptions{}); err != nil {
+	if err := p.ensureService(ctx, service); err != nil {
 		if deleteErr := p.Client.AppsV1().Deployments(p.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); deleteErr != nil {
 			return CreateComputeResult{}, errors.Join(err, fmt.Errorf("cleanup deployment %q: %w", name, deleteErr))
 		}
-		if codexSecretName != "" {
+		if codexSecretCreated {
 			if deleteErr := p.Client.CoreV1().Secrets(p.Namespace).Delete(ctx, codexSecretName, metav1.DeleteOptions{}); deleteErr != nil {
 				return CreateComputeResult{}, errors.Join(err, fmt.Errorf("cleanup secret %q: %w", codexSecretName, deleteErr))
 			}
@@ -234,6 +237,46 @@ func (p Provider) CreateStorageVolume(ctx context.Context, input CreateStorageVo
 		return CreateStorageVolumeResult{}, err
 	}
 	return CreateStorageVolumeResult{ProviderRef: "pvc/" + name}, nil
+}
+
+func (p Provider) ensureCodexSecret(ctx context.Context, secret *corev1.Secret) (bool, error) {
+	if _, err := p.Client.CoreV1().Secrets(p.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err == nil {
+		return true, nil
+	} else if !apierrors.IsAlreadyExists(err) {
+		return false, err
+	}
+	existing, err := p.Client.CoreV1().Secrets(p.Namespace).Get(ctx, secret.Name, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+	secret.ResourceVersion = existing.ResourceVersion
+	_, err = p.Client.CoreV1().Secrets(p.Namespace).Update(ctx, secret, metav1.UpdateOptions{})
+	return false, err
+}
+
+func (p Provider) ensureDeployment(ctx context.Context, deploy *appsv1.Deployment) error {
+	if _, err := p.Client.AppsV1().Deployments(p.Namespace).Create(ctx, deploy, metav1.CreateOptions{}); err == nil {
+		return nil
+	} else if !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	existing, err := p.Client.AppsV1().Deployments(p.Namespace).Get(ctx, deploy.Name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	deploy.ResourceVersion = existing.ResourceVersion
+	_, err = p.Client.AppsV1().Deployments(p.Namespace).Update(ctx, deploy, metav1.UpdateOptions{})
+	return err
+}
+
+func (p Provider) ensureService(ctx context.Context, service *corev1.Service) error {
+	if _, err := p.Client.CoreV1().Services(p.Namespace).Create(ctx, service, metav1.CreateOptions{}); err == nil {
+		return nil
+	} else if apierrors.IsAlreadyExists(err) {
+		return nil
+	} else {
+		return err
+	}
 }
 
 func (p Provider) AttachStorage(ctx context.Context, input AttachStorageInput) (AttachStorageResult, error) {

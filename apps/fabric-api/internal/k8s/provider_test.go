@@ -299,6 +299,28 @@ func TestCreateComputeAddsCodexSecretEnvWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCreateComputeIsIdempotentAfterPartialSuccess(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := Provider{
+		Client:         client,
+		Namespace:      "opl-fabric",
+		WorkspaceImage: "workspace:latest",
+		CodexAPIKey:    "secret",
+	}
+
+	first, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-retry", WorkspaceName: "Retry", ProductPresetID: "basic"})
+	if err != nil {
+		t.Fatalf("first CreateCompute: %v", err)
+	}
+	second, err := provider.CreateCompute(context.Background(), CreateComputeInput{ID: "compute-retry", WorkspaceName: "Retry", ProductPresetID: "basic"})
+	if err != nil {
+		t.Fatalf("second CreateCompute: %v", err)
+	}
+	if second.ProviderRef != first.ProviderRef || second.ServiceRef != first.ServiceRef {
+		t.Fatalf("refs = %+v, want %+v", second, first)
+	}
+}
+
 func TestCreateStorageVolumeCreatesPVC(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	provider := Provider{Client: client, Namespace: "opl-fabric", StorageClassName: "cbs"}
