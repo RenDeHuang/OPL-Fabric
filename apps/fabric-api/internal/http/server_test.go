@@ -176,6 +176,33 @@ func TestCreateWorkspaceEndpointReturnsAcceptedOperation(t *testing.T) {
 	if len(store.workspaces) != 1 || len(store.storageVolumes) != 1 || len(store.computeResources) != 1 || len(store.storageAttachments) != 1 || len(store.workspaceEntries) != 1 {
 		t.Fatalf("aggregate rows missing: workspaces=%d storage=%d compute=%d attachments=%d entries=%d", len(store.workspaces), len(store.storageVolumes), len(store.computeResources), len(store.storageAttachments), len(store.workspaceEntries))
 	}
+	if store.workspaceReservations != 1 {
+		t.Fatalf("workspace reservations = %d, want 1", store.workspaceReservations)
+	}
+}
+
+func TestCreateWorkspaceEndpointDoesNotLeaveRowsWhenReservationFails(t *testing.T) {
+	store := &recordingStore{reservationErr: postgres.ErrStoreNotOpen}
+	cfg := testServiceConfig()
+	cfg.Store = store
+	svc := service.New(cfg)
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	body := `{"accountId":"acct-1","requestedBy":"user-1","workspaceName":"Lab"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/fabric/workspaces", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer test-token")
+	req.Header.Set("Idempotency-Key", "idem-workspace-fail-1")
+	req.Header.Set("X-Correlation-Id", "corr-workspace-fail-1")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	if len(store.workspaces) != 0 || len(store.storageVolumes) != 0 || len(store.computeResources) != 0 || len(store.storageAttachments) != 0 || len(store.workspaceEntries) != 0 || len(store.operations) != 0 {
+		t.Fatalf("partial rows left behind: workspaces=%d storage=%d compute=%d attachments=%d entries=%d operations=%d", len(store.workspaces), len(store.storageVolumes), len(store.computeResources), len(store.storageAttachments), len(store.workspaceEntries), len(store.operations))
+	}
 }
 
 func TestWorkspaceEndpointReturnsAggregateStatus(t *testing.T) {
@@ -228,6 +255,63 @@ func TestWorkspaceEndpointReturnsAggregateStatus(t *testing.T) {
 	}
 	if workspace.WorkspaceID != receipt.ResourceID || workspace.State != "provisioning" || workspace.Storage.SizeGB != 20 || workspace.Entry.URL == "" || workspace.OperationID == "" {
 		t.Fatalf("workspace mismatch: %+v", workspace)
+	}
+}
+
+func TestResourceStatusEndpointsReturnDurableRows(t *testing.T) {
+	store := &recordingStore{
+		storageVolumes: map[string]postgres.StorageVolumeRow{
+			"storage-1": {ID: "storage-1", State: "available", SizeGB: 20, ProviderRef: "pvc/storage-1", Retained: true},
+		},
+		computeResources: map[string]postgres.ComputeResourceRow{
+			"compute-1": {ID: "compute-1", State: "running", ProviderRef: "deployment/compute-1", RuntimeRef: "service/compute-1"},
+		},
+		storageAttachments: map[string]postgres.StorageAttachmentRow{
+			"attach-1": {ID: "attach-1", ComputeID: "compute-1", StorageID: "storage-1", State: "attached", MountPath: "/data", ProviderRef: "deployment/compute-1:pvc/storage-1"},
+		},
+		workspaceEntries: map[string]postgres.WorkspaceEntryRow{
+			"entry-1": {ID: "entry-1", WorkspaceID: "ws-1", AttachmentID: "attach-1", State: "ready", Host: "workspace.medopl.cn", Path: "/w/ws-1/", ServiceRef: "service/compute-1"},
+		},
+	}
+	cfg := testServiceConfig()
+	cfg.Store = store
+	server := NewServer(service.New(cfg), Config{OperatorToken: "test-token"})
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"/api/fabric/storage-volumes/storage-1", `"sizeGb":20`},
+		{"/api/fabric/compute-resources/compute-1", `"runtimeRef":"service/compute-1"`},
+		{"/api/fabric/storage-attachments/attach-1", `"mountPath":"/data"`},
+		{"/api/fabric/workspace-entries/entry-1", `"serviceRef":"service/compute-1"`},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		req.Header.Set("Authorization", "Bearer test-token")
+		rec := httptest.NewRecorder()
+
+		server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, body=%s", tc.path, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), tc.want) {
+			t.Fatalf("%s body = %s, want fragment %s", tc.path, rec.Body.String(), tc.want)
+		}
+	}
+}
+
+func TestResourceStatusEndpointsRequireAuth(t *testing.T) {
+	cfg := testServiceConfig()
+	cfg.Store = &recordingStore{}
+	server := NewServer(service.New(cfg), Config{OperatorToken: "test-token"})
+	req := httptest.NewRequest(http.MethodGet, "/api/fabric/storage-volumes/storage-1", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }
 
@@ -410,12 +494,14 @@ func testServiceConfig() service.Config {
 }
 
 type recordingStore struct {
-	operations         map[string]postgres.OperationRow
-	storageVolumes     map[string]postgres.StorageVolumeRow
-	computeResources   map[string]postgres.ComputeResourceRow
-	storageAttachments map[string]postgres.StorageAttachmentRow
-	workspaceEntries   map[string]postgres.WorkspaceEntryRow
-	workspaces         map[string]postgres.WorkspaceRow
+	operations            map[string]postgres.OperationRow
+	storageVolumes        map[string]postgres.StorageVolumeRow
+	computeResources      map[string]postgres.ComputeResourceRow
+	storageAttachments    map[string]postgres.StorageAttachmentRow
+	workspaceEntries      map[string]postgres.WorkspaceEntryRow
+	workspaces            map[string]postgres.WorkspaceRow
+	workspaceReservations int
+	reservationErr        error
 }
 
 func (s *recordingStore) CreateOperation(_ context.Context, row postgres.OperationRow) error {
@@ -471,6 +557,29 @@ func (s *recordingStore) CreateWorkspace(_ context.Context, row postgres.Workspa
 	}
 	s.workspaces[row.ID] = row
 	return nil
+}
+
+func (s *recordingStore) CreateWorkspaceReservation(ctx context.Context, reservation postgres.WorkspaceReservation) error {
+	s.workspaceReservations++
+	if s.reservationErr != nil {
+		return s.reservationErr
+	}
+	if err := s.CreateOperation(ctx, reservation.Operation); err != nil {
+		return err
+	}
+	if err := s.CreateStorageVolume(ctx, reservation.Storage); err != nil {
+		return err
+	}
+	if err := s.CreateComputeResource(ctx, reservation.Compute); err != nil {
+		return err
+	}
+	if err := s.CreateStorageAttachment(ctx, reservation.Attachment); err != nil {
+		return err
+	}
+	if err := s.CreateWorkspaceEntry(ctx, reservation.Entry); err != nil {
+		return err
+	}
+	return s.CreateWorkspace(ctx, reservation.Workspace)
 }
 
 func (s *recordingStore) GetWorkspace(_ context.Context, id string) (postgres.WorkspaceRow, error) {

@@ -1,0 +1,14 @@
+{
+  "$id": "https://opl-fabric.local/contracts/fabric-compute-resource.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fabric Compute Resource",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "state", "providerRef", "runtimeRef"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "state": { "type": "string", "minLength": 1 },
+    "providerRef": { "type": "string" },
+    "runtimeRef": { "type": "string" }
+  }
+}

@@ -70,7 +70,22 @@ OPL_OPERATOR_TOKEN=dev-operator-token go run ./cmd/fabric-api
 
 Mutating reservation endpoints require `DATABASE_URL`; when it is configured the API opens PostgreSQL and runs the embedded migration before serving.
 
-The first Console-facing delivery endpoint is `POST /api/fabric/workspaces`. It reserves storage, compute, storage attachment, Workspace entry, and a Fabric operation in PostgreSQL, then returns an operation receipt. `GET /api/fabric/workspaces/{id}` returns the aggregate status for Console polling. This is still a no-rollout control-plane path until the worker is connected to live providers.
+The Console-facing product mainline is `POST /api/fabric/workspaces`. It reserves storage, compute, storage attachment, Workspace entry, and a Fabric operation in one PostgreSQL transaction, then returns an operation receipt. When `OPL_FABRIC_WORKER_ENABLED=true`, the background worker leases the accepted workspace operation and executes the chain through the orchestrator:
+
+```text
+Workspace create -> storage -> compute -> attach -> entry -> running Workspace URL
+```
+
+The single-resource APIs remain available as lower-level operational routes:
+
+- `POST /api/fabric/storage-volumes` and `GET /api/fabric/storage-volumes/{id}`
+- `POST /api/fabric/compute-resources` and `GET /api/fabric/compute-resources/{id}`
+- `POST /api/fabric/storage-attachments` and `GET /api/fabric/storage-attachments/{id}`
+- `POST /api/fabric/workspace-entries` and `GET /api/fabric/workspace-entries/{id}`
+
+OPL Console should use the workspace route as the normal create path and use the single-resource routes for advanced resource views, operator debugging, and failure recovery. OPL Ledger should receive operation, evidence, and provider refs from Fabric; it should not create cloud resources itself.
+
+The worker is disabled by default in local env examples and the Kubernetes skeleton. Enabling it in staging requires verified PostgreSQL, in-cluster Kubernetes access, storage class, ingress class, Workspace image, pull secrets, and explicit live readiness review.
 
 In a second shell, run the operator console. The Vite dev server proxies `/api` to `http://127.0.0.1:8787` and injects the Bearer token from its server-side `OPL_OPERATOR_TOKEN` environment variable, so the token is not exposed through a browser `VITE_` variable.
 
@@ -83,10 +98,11 @@ OPL_OPERATOR_TOKEN=dev-operator-token npm --prefix apps/fabric-console run dev
 `deploy/k8s/opl-fabric-api.yaml` contains a namespace-scoped skeleton for the Fabric API:
 
 - `Deployment` and `Service` on port `8787`.
-- `ServiceAccount`, `Role`, and `RoleBinding` with current minimal client-go permissions: create/delete Deployments and create Services in the namespace.
+- `ServiceAccount`, `Role`, and `RoleBinding` with namespace-scoped client-go permissions for Deployments, Services, PVCs, Secrets, and Ingresses used by the worker path.
 - Default image `opl-fabric-api:local`; replace it with a registry image in your deployment pipeline or overlay.
 - `OPL_K8S_NAMESPACE` populated from the pod metadata namespace.
 - Workspace defaults matching backend config: `OPL_WORKSPACE_IMAGE`, `OPL_WORKSPACE_DOMAIN`, and `OPL_WORKSPACE_STORAGE_CLASS`.
+- Worker defaults are present but disabled through `OPL_FABRIC_WORKER_ENABLED=false`.
 - Tencent capacity defaults are placeholders only: `TENCENT_TKE_REGION`, `TENCENT_DEPLOY_CLUSTER_ID`, TCR refs, and hourly node pool charge type. Real mutation credentials must come from Secret keys.
 - Staging NodePool mutation is explicitly allowed by `OPL_TKE_ALLOW_NODEPOOL_MUTATION=true`, but only the Tencent Cloud Go SDK resolver phase may use it.
 

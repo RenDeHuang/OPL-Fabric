@@ -14,10 +14,16 @@ metadata:
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["create", "delete"]
+    verbs: ["create", "get", "update", "delete"]
   - apiGroups: [""]
     resources: ["services"]
-    verbs: ["create"]
+    verbs: ["create", "get", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "secrets"]
+    verbs: ["create", "get", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["create", "get", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -62,6 +68,16 @@ spec:
               value: "8787"
             - name: OPL_FABRIC_CONFIG_DIR
               value: /etc/opl-fabric/config
+            - name: OPL_FABRIC_WORKER_ENABLED
+              value: "false"
+            - name: OPL_FABRIC_WORKER_OWNER
+              value: fabric-api
+            - name: OPL_FABRIC_WORKER_INTERVAL
+              value: 5s
+            - name: OPL_FABRIC_WORKER_LEASE_TTL
+              value: 60s
+            - name: OPL_FABRIC_WORKER_BATCH_SIZE
+              value: "10"
             - name: OPL_K8S_NAMESPACE
               valueFrom:
                 fieldRef:

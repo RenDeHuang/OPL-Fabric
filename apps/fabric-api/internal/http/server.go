@@ -27,14 +27,46 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 	mux.HandleFunc("POST /api/fabric/storage-volumes", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptStorageVolume)
 	})
+	mux.HandleFunc("GET /api/fabric/storage-volumes/{id}", func(w http.ResponseWriter, r *http.Request) {
+		resource, err := svc.StorageVolume(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, resource)
+	})
 	mux.HandleFunc("POST /api/fabric/compute-resources", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptComputeResource)
+	})
+	mux.HandleFunc("GET /api/fabric/compute-resources/{id}", func(w http.ResponseWriter, r *http.Request) {
+		resource, err := svc.ComputeResource(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, resource)
 	})
 	mux.HandleFunc("POST /api/fabric/storage-attachments", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptStorageAttachment)
 	})
+	mux.HandleFunc("GET /api/fabric/storage-attachments/{id}", func(w http.ResponseWriter, r *http.Request) {
+		resource, err := svc.StorageAttachment(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, resource)
+	})
 	mux.HandleFunc("POST /api/fabric/workspace-entries", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptWorkspaceEntry)
+	})
+	mux.HandleFunc("GET /api/fabric/workspace-entries/{id}", func(w http.ResponseWriter, r *http.Request) {
+		resource, err := svc.WorkspaceEntry(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, resource)
 	})
 	mux.HandleFunc("POST /api/fabric/workspaces", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptWorkspace)

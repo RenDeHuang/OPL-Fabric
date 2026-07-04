@@ -26,6 +26,7 @@ type Store interface {
 	CreateStorageAttachment(context.Context, postgres.StorageAttachmentRow) error
 	CreateWorkspaceEntry(context.Context, postgres.WorkspaceEntryRow) error
 	CreateWorkspace(context.Context, postgres.WorkspaceRow) error
+	CreateWorkspaceReservation(context.Context, postgres.WorkspaceReservation) error
 	GetWorkspace(context.Context, string) (postgres.WorkspaceRow, error)
 	GetStorageVolume(context.Context, string) (postgres.StorageVolumeRow, error)
 	GetComputeResource(context.Context, string) (postgres.ComputeResourceRow, error)
@@ -211,6 +212,39 @@ type WorkspaceEntryStatus struct {
 	URL   string `json:"url"`
 }
 
+type StorageVolume struct {
+	ID          string `json:"id"`
+	State       string `json:"state"`
+	ProviderRef string `json:"providerRef"`
+	SizeGB      int    `json:"sizeGb"`
+	Retained    bool   `json:"retained"`
+}
+
+type ComputeResource struct {
+	ID          string `json:"id"`
+	State       string `json:"state"`
+	ProviderRef string `json:"providerRef"`
+	RuntimeRef  string `json:"runtimeRef"`
+}
+
+type StorageAttachment struct {
+	ID          string `json:"id"`
+	ComputeID   string `json:"computeId"`
+	StorageID   string `json:"storageId"`
+	State       string `json:"state"`
+	MountPath   string `json:"mountPath"`
+	ProviderRef string `json:"providerRef"`
+}
+
+type WorkspaceEntry struct {
+	ID           string `json:"id"`
+	WorkspaceID  string `json:"workspaceId"`
+	AttachmentID string `json:"attachmentId"`
+	State        string `json:"state"`
+	URL          string `json:"url"`
+	ServiceRef   string `json:"serviceRef"`
+}
+
 type ConfirmRequest struct {
 	RequestedBy string `json:"requestedBy"`
 	Confirm     bool   `json:"confirm"`
@@ -323,30 +357,23 @@ func (s *Service) AcceptWorkspace(ctx context.Context, headers MutationHeaders, 
 	if err != nil {
 		return OperationReceipt{}, err
 	}
-	if err := s.store.CreateOperation(ctx, postgres.OperationRow{
-		ID:             operationID,
-		CorrelationID:  headers.CorrelationID,
-		IdempotencyKey: headers.IdempotencyKey,
-		RequestedBy:    req.RequestedBy,
-		ResourceID:     workspaceID,
-		ResourceKind:   "workspace",
-		State:          "accepted",
-	}); err != nil {
-		return OperationReceipt{}, err
+	reservation := postgres.WorkspaceReservation{
+		Operation: postgres.OperationRow{
+			ID:             operationID,
+			CorrelationID:  headers.CorrelationID,
+			IdempotencyKey: headers.IdempotencyKey,
+			RequestedBy:    req.RequestedBy,
+			ResourceID:     workspaceID,
+			ResourceKind:   "workspace",
+			State:          "accepted",
+		},
+		Storage:    postgres.StorageVolumeRow{ID: storageID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, State: "creating", SizeGB: sizeGB, Retained: true},
+		Compute:    postgres.ComputeResourceRow{ID: computeID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, ComputeShapeJSON: string(shapeJSON), ProviderInstanceType: req.ProviderInstanceType, CapacityPoolID: req.CapacityPoolID, IsolationMode: req.IsolationMode, State: "creating"},
+		Attachment: postgres.StorageAttachmentRow{ID: attachmentID, OwnerAccountID: req.AccountID, ComputeID: computeID, StorageID: storageID, State: "attaching", MountPath: "/data"},
+		Entry:      postgres.WorkspaceEntryRow{ID: entryID, OwnerAccountID: req.AccountID, WorkspaceID: workspaceID, AttachmentID: attachmentID, State: "creating", Host: s.workspaceDomain, Path: "/w/" + workspaceID + "/"},
+		Workspace:  postgres.WorkspaceRow{ID: workspaceID, OwnerAccountID: req.AccountID, WorkspaceName: req.WorkspaceName, ProductPresetID: productPresetID, StorageID: storageID, ComputeID: computeID, AttachmentID: attachmentID, EntryID: entryID, OperationID: operationID, State: "provisioning"},
 	}
-	if err := s.store.CreateStorageVolume(ctx, postgres.StorageVolumeRow{ID: storageID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, State: "creating", SizeGB: sizeGB, Retained: true}); err != nil {
-		return OperationReceipt{}, err
-	}
-	if err := s.store.CreateComputeResource(ctx, postgres.ComputeResourceRow{ID: computeID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, ComputeShapeJSON: string(shapeJSON), ProviderInstanceType: req.ProviderInstanceType, CapacityPoolID: req.CapacityPoolID, IsolationMode: req.IsolationMode, State: "creating"}); err != nil {
-		return OperationReceipt{}, err
-	}
-	if err := s.store.CreateStorageAttachment(ctx, postgres.StorageAttachmentRow{ID: attachmentID, OwnerAccountID: req.AccountID, ComputeID: computeID, StorageID: storageID, State: "attaching", MountPath: "/data"}); err != nil {
-		return OperationReceipt{}, err
-	}
-	if err := s.store.CreateWorkspaceEntry(ctx, postgres.WorkspaceEntryRow{ID: entryID, OwnerAccountID: req.AccountID, WorkspaceID: workspaceID, AttachmentID: attachmentID, State: "creating", Host: s.workspaceDomain, Path: "/w/" + workspaceID + "/"}); err != nil {
-		return OperationReceipt{}, err
-	}
-	if err := s.store.CreateWorkspace(ctx, postgres.WorkspaceRow{ID: workspaceID, OwnerAccountID: req.AccountID, WorkspaceName: req.WorkspaceName, ProductPresetID: productPresetID, StorageID: storageID, ComputeID: computeID, AttachmentID: attachmentID, EntryID: entryID, OperationID: operationID, State: "provisioning"}); err != nil {
+	if err := s.store.CreateWorkspaceReservation(ctx, reservation); err != nil {
 		return OperationReceipt{}, err
 	}
 	return OperationReceipt{OperationID: operationID, State: "accepted", ResourceKind: "workspace", ResourceID: workspaceID}, nil
@@ -408,6 +435,50 @@ func (s *Service) Workspace(ctx context.Context, id string) (Workspace, error) {
 		Entry:       WorkspaceEntryStatus{ID: entry.ID, State: entry.State, URL: "https://" + entry.Host + entry.Path},
 		OperationID: workspace.OperationID,
 	}, nil
+}
+
+func (s *Service) StorageVolume(ctx context.Context, id string) (StorageVolume, error) {
+	if s.store == nil {
+		return StorageVolume{}, ErrStoreRequired
+	}
+	row, err := s.store.GetStorageVolume(ctx, id)
+	if err != nil {
+		return StorageVolume{}, err
+	}
+	return StorageVolume{ID: row.ID, State: row.State, ProviderRef: row.ProviderRef, SizeGB: row.SizeGB, Retained: row.Retained}, nil
+}
+
+func (s *Service) ComputeResource(ctx context.Context, id string) (ComputeResource, error) {
+	if s.store == nil {
+		return ComputeResource{}, ErrStoreRequired
+	}
+	row, err := s.store.GetComputeResource(ctx, id)
+	if err != nil {
+		return ComputeResource{}, err
+	}
+	return ComputeResource{ID: row.ID, State: row.State, ProviderRef: row.ProviderRef, RuntimeRef: row.RuntimeRef}, nil
+}
+
+func (s *Service) StorageAttachment(ctx context.Context, id string) (StorageAttachment, error) {
+	if s.store == nil {
+		return StorageAttachment{}, ErrStoreRequired
+	}
+	row, err := s.store.GetStorageAttachment(ctx, id)
+	if err != nil {
+		return StorageAttachment{}, err
+	}
+	return StorageAttachment{ID: row.ID, ComputeID: row.ComputeID, StorageID: row.StorageID, State: row.State, MountPath: row.MountPath, ProviderRef: row.ProviderRef}, nil
+}
+
+func (s *Service) WorkspaceEntry(ctx context.Context, id string) (WorkspaceEntry, error) {
+	if s.store == nil {
+		return WorkspaceEntry{}, ErrStoreRequired
+	}
+	row, err := s.store.GetWorkspaceEntry(ctx, id)
+	if err != nil {
+		return WorkspaceEntry{}, err
+	}
+	return WorkspaceEntry{ID: row.ID, WorkspaceID: row.WorkspaceID, AttachmentID: row.AttachmentID, State: row.State, URL: "https://" + row.Host + row.Path, ServiceRef: row.ServiceRef}, nil
 }
 
 func (s *Service) acceptConfirmed(ctx context.Context, headers MutationHeaders, req ConfirmRequest, resourceKind, resourceID string) (OperationReceipt, error) {

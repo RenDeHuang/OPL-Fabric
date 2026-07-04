@@ -9,7 +9,8 @@ Supported in the first implementation:
 - Catalog and readiness endpoints.
 - Mutating reservation endpoints with operation receipts.
 - Console-facing Workspace delivery reservation API and aggregate status API.
-- No-rollout operation orchestrator for accepted operations.
+- No-rollout operation orchestrator and configurable background worker for accepted operations.
+- Single-resource status APIs for storage, compute, attachment, and workspace entry.
 - Domain safety rules.
 - PostgreSQL schema.
 - PostgreSQL store methods and startup migration wiring.
@@ -30,9 +31,9 @@ Remaining risks:
 
 - The OPL Cloud comparison is pinned to `RenDeHuang/OPL-Cloud@126e6bf8b27ef18c2d18df8d846455015e0b3ee0`; newer OPL Cloud commits need a deliberate re-baseline and contract diff.
 - Readiness is still mainly configuration and environment readiness. Live PostgreSQL version checks and live Kubernetes API, storage, ingress, Tencent TKE capacity, node pool template, quota, and cluster capability checks are not complete.
-- Mutating APIs now accept resource reservations and return operation receipts, including `POST /api/fabric/workspaces`, but they do not yet run the asynchronous orchestrator or mutate Kubernetes/Tencent Cloud resources.
-- `GET /api/fabric/workspaces/{id}` returns the reserved storage, compute, attachment, entry, and operation aggregate for Console polling.
-- The orchestrator is implemented as a control-plane component, but it is not yet wired as a background worker in the API process.
+- Mutating APIs now accept resource reservations and return operation receipts, including `POST /api/fabric/workspaces`. The workspace route is the product mainline; it reserves storage, compute, attachment, entry, workspace, and operation rows transactionally.
+- `GET /api/fabric/workspaces/{id}` returns the reserved storage, compute, attachment, entry, and operation aggregate for Console polling. `GET` routes for each single resource expose the decomposed state for Console advanced views, operations, and recovery.
+- The background worker is wired but disabled by default. When enabled, it leases accepted operations and runs the orchestrator. No real cluster worker run has been performed in this environment.
 - PostgreSQL coverage includes store method compilation and startup migration wiring, but not a live database migration and constraint test lane.
 - Production console hosting still needs explicit Fabric integration from OPL Cloud/Console. OPL Cloud now carries workspace gateway/proxy behavior in its Console server, while Fabric remains the storage/compute/attachment/entry API boundary.
 - The Kubernetes runtime provider now covers Deployment, Service, workspace Codex Secret, PVC, attachment mount, workspace ingress entry, detach, compute destroy, and PVC destroy with fake-client tests. Reconcile, status, watch behavior, and real-cluster validation remain future work.

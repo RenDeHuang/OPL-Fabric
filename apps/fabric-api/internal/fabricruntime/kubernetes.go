@@ -48,7 +48,7 @@ func (r KubernetesRuntime) CreateWorkspaceEntry(ctx context.Context, row postgre
 		WorkspaceID: row.WorkspaceID,
 		Host:        row.Host,
 		Path:        row.Path,
-		ServiceRef:  "service/" + row.WorkspaceID,
+		ServiceRef:  defaultString(row.ServiceRef, "service/"+row.WorkspaceID),
 	})
 }
 
@@ -62,6 +62,13 @@ func (r KubernetesRuntime) DestroyStorage(ctx context.Context, row postgres.Stor
 
 func (r KubernetesRuntime) DetachStorage(ctx context.Context, row postgres.StorageAttachmentRow) error {
 	return r.Provider.DetachStorage(ctx, fabrick8s.DetachStorageInput{ProviderRef: row.ProviderRef})
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func splitProviderRefs(providerRef, computeID, storageID string) (computeRef, storageRef string) {

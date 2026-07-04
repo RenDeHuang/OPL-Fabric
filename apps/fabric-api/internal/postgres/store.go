@@ -3,7 +3,9 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,7 +20,16 @@ ALTER TABLE IF EXISTS storage_attachments
   ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE IF EXISTS workspace_entries
-  ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT '';
+  ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS service_ref TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE IF EXISTS fabric_operations
+  ADD COLUMN IF NOT EXISTS lease_owner TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS provider_refs JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
 `
 
 type OperationRow struct {
@@ -29,6 +40,9 @@ type OperationRow struct {
 	ResourceID     string
 	ResourceKind   string
 	State          string
+	LeaseOwner     string
+	Attempts       int
+	LastError      string
 }
 
 type StorageVolumeRow struct {
@@ -73,6 +87,7 @@ type WorkspaceEntryRow struct {
 	State          string
 	Host           string
 	Path           string
+	ServiceRef     string
 }
 
 type WorkspaceRow struct {
@@ -86,6 +101,15 @@ type WorkspaceRow struct {
 	EntryID         string
 	OperationID     string
 	State           string
+}
+
+type WorkspaceReservation struct {
+	Operation  OperationRow
+	Storage    StorageVolumeRow
+	Compute    ComputeResourceRow
+	Attachment StorageAttachmentRow
+	Entry      WorkspaceEntryRow
+	Workspace  WorkspaceRow
 }
 
 func Open(ctx context.Context, databaseURL string) (*Store, error) {
@@ -147,6 +171,81 @@ UPDATE fabric_operations
 SET state = $2, updated_at = now()
 WHERE id = $1
 `, id, state)
+	return err
+}
+
+func (s *Store) ListAcceptedOperations(ctx context.Context, limit int) ([]OperationRow, error) {
+	if s == nil || s.pool == nil {
+		return nil, ErrStoreNotOpen
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := s.pool.Query(ctx, `
+SELECT id, correlation_id, idempotency_key, requested_by, resource_id, resource_kind, state, lease_owner, attempts, last_error
+FROM fabric_operations
+WHERE state = 'accepted'
+  AND (lease_expires_at IS NULL OR lease_expires_at <= now())
+ORDER BY created_at ASC
+LIMIT $1
+`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	operations := []OperationRow{}
+	for rows.Next() {
+		var row OperationRow
+		if err := rows.Scan(&row.ID, &row.CorrelationID, &row.IdempotencyKey, &row.RequestedBy, &row.ResourceID, &row.ResourceKind, &row.State, &row.LeaseOwner, &row.Attempts, &row.LastError); err != nil {
+			return nil, err
+		}
+		operations = append(operations, row)
+	}
+	return operations, rows.Err()
+}
+
+func (s *Store) LeaseOperation(ctx context.Context, id, owner string, ttl time.Duration) (bool, error) {
+	if s == nil || s.pool == nil {
+		return false, ErrStoreNotOpen
+	}
+	if ttl <= 0 {
+		ttl = time.Minute
+	}
+	ttlSeconds := int(ttl.Seconds())
+	if ttlSeconds < 1 {
+		ttlSeconds = 1
+	}
+	tag, err := s.pool.Exec(ctx, `
+UPDATE fabric_operations
+SET lease_owner = $2, lease_expires_at = now() + make_interval(secs => $3), updated_at = now()
+WHERE id = $1
+  AND state = 'accepted'
+  AND (lease_expires_at IS NULL OR lease_expires_at <= now())
+`, id, owner, ttlSeconds)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (s *Store) RecordOperationFailure(ctx context.Context, id string, cause error) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	message := ""
+	if cause != nil {
+		message = cause.Error()
+	}
+	_, err := s.pool.Exec(ctx, `
+UPDATE fabric_operations
+SET attempts = attempts + 1,
+    last_error = $2,
+    state = CASE WHEN attempts + 1 >= 3 THEN 'failed' ELSE 'accepted' END,
+    lease_owner = '',
+    lease_expires_at = NULL,
+    updated_at = now()
+WHERE id = $1
+`, id, message)
 	return err
 }
 
@@ -266,10 +365,10 @@ func (s *Store) CreateWorkspaceEntry(ctx context.Context, row WorkspaceEntryRow)
 		return ErrStoreNotOpen
 	}
 	_, err := s.pool.Exec(ctx, `
-INSERT INTO workspace_entries (id, owner_account_id, workspace_id, attachment_id, state, host, path)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO workspace_entries (id, owner_account_id, workspace_id, attachment_id, state, host, path, service_ref)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (id) DO NOTHING
-`, row.ID, row.OwnerAccountID, row.WorkspaceID, row.AttachmentID, row.State, row.Host, row.Path)
+`, row.ID, row.OwnerAccountID, row.WorkspaceID, row.AttachmentID, row.State, row.Host, row.Path, row.ServiceRef)
 	return err
 }
 
@@ -279,10 +378,10 @@ func (s *Store) GetWorkspaceEntry(ctx context.Context, id string) (WorkspaceEntr
 	}
 	var row WorkspaceEntryRow
 	err := s.pool.QueryRow(ctx, `
-SELECT id, owner_account_id, workspace_id, attachment_id, state, host, path
+SELECT id, owner_account_id, workspace_id, attachment_id, state, host, path, service_ref
 FROM workspace_entries
 WHERE id = $1
-`, id).Scan(&row.ID, &row.OwnerAccountID, &row.WorkspaceID, &row.AttachmentID, &row.State, &row.Host, &row.Path)
+`, id).Scan(&row.ID, &row.OwnerAccountID, &row.WorkspaceID, &row.AttachmentID, &row.State, &row.Host, &row.Path, &row.ServiceRef)
 	return row, err
 }
 
@@ -292,9 +391,9 @@ func (s *Store) UpdateWorkspaceEntry(ctx context.Context, row WorkspaceEntryRow)
 	}
 	_, err := s.pool.Exec(ctx, `
 UPDATE workspace_entries
-SET state = $2, host = $3, path = $4, updated_at = now()
+SET state = $2, host = $3, path = $4, service_ref = $5, updated_at = now()
 WHERE id = $1
-`, row.ID, row.State, row.Host, row.Path)
+`, row.ID, row.State, row.Host, row.Path, row.ServiceRef)
 	return err
 }
 
@@ -310,6 +409,38 @@ ON CONFLICT (id) DO NOTHING
 	return err
 }
 
+func (s *Store) CreateWorkspaceReservation(ctx context.Context, reservation WorkspaceReservation) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	if err := insertOperation(ctx, tx, reservation.Operation); err != nil {
+		return err
+	}
+	if err := insertStorageVolume(ctx, tx, reservation.Storage); err != nil {
+		return err
+	}
+	if err := insertComputeResource(ctx, tx, reservation.Compute); err != nil {
+		return err
+	}
+	if err := insertStorageAttachment(ctx, tx, reservation.Attachment); err != nil {
+		return err
+	}
+	if err := insertWorkspaceEntry(ctx, tx, reservation.Entry); err != nil {
+		return err
+	}
+	if err := insertWorkspace(ctx, tx, reservation.Workspace); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *Store) GetWorkspace(ctx context.Context, id string) (WorkspaceRow, error) {
 	if s == nil || s.pool == nil {
 		return WorkspaceRow{}, ErrStoreNotOpen
@@ -321,6 +452,72 @@ FROM workspaces
 WHERE id = $1
 `, id).Scan(&row.ID, &row.OwnerAccountID, &row.WorkspaceName, &row.ProductPresetID, &row.StorageID, &row.ComputeID, &row.AttachmentID, &row.EntryID, &row.OperationID, &row.State)
 	return row, err
+}
+
+func (s *Store) UpdateWorkspace(ctx context.Context, row WorkspaceRow) error {
+	if s == nil || s.pool == nil {
+		return ErrStoreNotOpen
+	}
+	_, err := s.pool.Exec(ctx, `
+UPDATE workspaces
+SET state = $2, updated_at = now()
+WHERE id = $1
+`, row.ID, row.State)
+	return err
+}
+
+func insertOperation(ctx context.Context, tx pgx.Tx, row OperationRow) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO fabric_operations (id, correlation_id, idempotency_key, requested_by, resource_id, resource_kind, state)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (idempotency_key) DO NOTHING
+`, row.ID, row.CorrelationID, row.IdempotencyKey, row.RequestedBy, row.ResourceID, row.ResourceKind, row.State)
+	return err
+}
+
+func insertStorageVolume(ctx context.Context, tx pgx.Tx, row StorageVolumeRow) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO storage_volumes (id, owner_account_id, product_preset_id, state, provider_ref, size_gb, retained)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
+`, row.ID, row.OwnerAccountID, row.ProductPresetID, row.State, row.ProviderRef, row.SizeGB, row.Retained)
+	return err
+}
+
+func insertComputeResource(ctx context.Context, tx pgx.Tx, row ComputeResourceRow) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO compute_resources (id, owner_account_id, product_preset_id, compute_shape_json, provider_instance_type, capacity_pool_id, isolation_mode, node_pool_id, runtime_ref, state, provider_ref)
+VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
+`, row.ID, row.OwnerAccountID, row.ProductPresetID, defaultJSON(row.ComputeShapeJSON), row.ProviderInstanceType, row.CapacityPoolID, row.IsolationMode, row.NodePoolID, row.RuntimeRef, row.State, row.ProviderRef)
+	return err
+}
+
+func insertStorageAttachment(ctx context.Context, tx pgx.Tx, row StorageAttachmentRow) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO storage_attachments (id, owner_account_id, compute_id, storage_id, state, mount_path, provider_ref)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
+`, row.ID, row.OwnerAccountID, row.ComputeID, row.StorageID, row.State, row.MountPath, row.ProviderRef)
+	return err
+}
+
+func insertWorkspaceEntry(ctx context.Context, tx pgx.Tx, row WorkspaceEntryRow) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO workspace_entries (id, owner_account_id, workspace_id, attachment_id, state, host, path, service_ref)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (id) DO NOTHING
+`, row.ID, row.OwnerAccountID, row.WorkspaceID, row.AttachmentID, row.State, row.Host, row.Path, row.ServiceRef)
+	return err
+}
+
+func insertWorkspace(ctx context.Context, tx pgx.Tx, row WorkspaceRow) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO workspaces (id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_id, attachment_id, entry_id, operation_id, state)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (id) DO NOTHING
+`, row.ID, row.OwnerAccountID, row.WorkspaceName, row.ProductPresetID, row.StorageID, row.ComputeID, row.AttachmentID, row.EntryID, row.OperationID, row.State)
+	return err
 }
 
 func defaultJSON(value string) string {

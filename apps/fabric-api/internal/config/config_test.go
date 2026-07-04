@@ -27,6 +27,11 @@ func TestLoadReadsFabricConfigDirAndWorkspaceDefaults(t *testing.T) {
 	t.Setenv("OPL_CODEX_MODEL_PROVIDER", "gflabtoken")
 	t.Setenv("OPL_CODEX_PROVIDER_NAME", "gflabtoken")
 	t.Setenv("CODEX_HOME", "/data/codex")
+	t.Setenv("OPL_FABRIC_WORKER_ENABLED", "true")
+	t.Setenv("OPL_FABRIC_WORKER_OWNER", "fabric-api-1")
+	t.Setenv("OPL_FABRIC_WORKER_INTERVAL", "2s")
+	t.Setenv("OPL_FABRIC_WORKER_LEASE_TTL", "30s")
+	t.Setenv("OPL_FABRIC_WORKER_BATCH_SIZE", "5")
 
 	cfg := Load()
 
@@ -50,6 +55,9 @@ func TestLoadReadsFabricConfigDirAndWorkspaceDefaults(t *testing.T) {
 	}
 	if cfg.CodexAPIKey != "secret" {
 		t.Fatalf("CodexAPIKey not loaded")
+	}
+	if cfg.WorkerEnabled != "true" || cfg.WorkerOwner != "fabric-api-1" || cfg.WorkerInterval != "2s" || cfg.WorkerLeaseTTL != "30s" || cfg.WorkerBatchSize != "5" {
+		t.Fatalf("worker config not loaded: %+v", cfg)
 	}
 }
 
@@ -82,5 +90,14 @@ func TestLoadUsesProductionCompatibleDefaults(t *testing.T) {
 	}
 	if cfg.StagingE2EAllowLive != "false" {
 		t.Fatalf("StagingE2EAllowLive = %q", cfg.StagingE2EAllowLive)
+	}
+	if cfg.WorkerEnabled != "false" {
+		t.Fatalf("WorkerEnabled = %q", cfg.WorkerEnabled)
+	}
+	if cfg.WorkerOwner != "fabric-api" {
+		t.Fatalf("WorkerOwner = %q", cfg.WorkerOwner)
+	}
+	if cfg.WorkerInterval != "5s" || cfg.WorkerLeaseTTL != "60s" || cfg.WorkerBatchSize != "10" {
+		t.Fatalf("worker defaults = interval:%q lease:%q batch:%q", cfg.WorkerInterval, cfg.WorkerLeaseTTL, cfg.WorkerBatchSize)
 	}
 }

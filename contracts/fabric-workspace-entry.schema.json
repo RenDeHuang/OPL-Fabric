@@ -1,0 +1,16 @@
+{
+  "$id": "https://opl-fabric.local/contracts/fabric-workspace-entry.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fabric Workspace Entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "workspaceId", "attachmentId", "state", "url", "serviceRef"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "workspaceId": { "type": "string", "minLength": 1 },
+    "attachmentId": { "type": "string", "minLength": 1 },
+    "state": { "type": "string", "minLength": 1 },
+    "url": { "type": "string", "minLength": 1 },
+    "serviceRef": { "type": "string" }
+  }
+}

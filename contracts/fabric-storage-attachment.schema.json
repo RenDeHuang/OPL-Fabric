@@ -1,0 +1,16 @@
+{
+  "$id": "https://opl-fabric.local/contracts/fabric-storage-attachment.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fabric Storage Attachment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "computeId", "storageId", "state", "mountPath", "providerRef"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "computeId": { "type": "string", "minLength": 1 },
+    "storageId": { "type": "string", "minLength": 1 },
+    "state": { "type": "string", "minLength": 1 },
+    "mountPath": { "type": "string", "minLength": 1 },
+    "providerRef": { "type": "string" }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$id": "https://opl-fabric.local/contracts/fabric-storage-volume.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fabric Storage Volume",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "state", "providerRef", "sizeGb", "retained"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "state": { "type": "string", "minLength": 1 },
+    "providerRef": { "type": "string" },
+    "sizeGb": { "type": "integer", "minimum": 1 },
+    "retained": { "type": "boolean" }
+  }
+}

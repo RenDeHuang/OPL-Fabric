@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSchemaContainsRequiredTables(t *testing.T) {
@@ -32,11 +33,18 @@ func TestSchemaContainsPersistenceConstraints(t *testing.T) {
 		"storage_id TEXT NOT NULL REFERENCES storage_volumes(id)",
 		"attachment_id TEXT NOT NULL REFERENCES storage_attachments(id)",
 		"owner_account_id TEXT NOT NULL",
+		"service_ref TEXT NOT NULL DEFAULT ''",
 		"compute_shape_json JSONB NOT NULL DEFAULT '{}'::jsonb",
 		"retained BOOLEAN NOT NULL DEFAULT true",
 		"operation_id TEXT NOT NULL REFERENCES fabric_operations(id)",
 		"operation_id TEXT NOT NULL UNIQUE REFERENCES fabric_operations(id)",
 		"idempotency_key TEXT NOT NULL UNIQUE",
+		"lease_owner TEXT NOT NULL DEFAULT ''",
+		"lease_expires_at TIMESTAMPTZ",
+		"attempts INTEGER NOT NULL DEFAULT 0",
+		"last_error TEXT NOT NULL DEFAULT ''",
+		"provider_refs JSONB NOT NULL DEFAULT '{}'::jsonb",
+		"evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb",
 		"storage_id TEXT NOT NULL REFERENCES storage_volumes(id)",
 		"compute_id TEXT NOT NULL REFERENCES compute_resources(id)",
 		"entry_id TEXT NOT NULL REFERENCES workspace_entries(id)",
@@ -55,6 +63,7 @@ func TestMigrationSQLBackfillsPhaseTwoColumns(t *testing.T) {
 		"ALTER TABLE IF EXISTS storage_attachments",
 		"ALTER TABLE IF EXISTS workspace_entries",
 		"ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT ''",
+		"ADD COLUMN IF NOT EXISTS service_ref TEXT NOT NULL DEFAULT ''",
 	}
 	for _, fragment := range required {
 		if !strings.Contains(migrationSQL, fragment) {
@@ -121,7 +130,22 @@ func TestNilStoreResourceMethodsReturnError(t *testing.T) {
 	if err := store.CreateWorkspace(ctx, WorkspaceRow{}); err != ErrStoreNotOpen {
 		t.Fatalf("CreateWorkspace error = %v, want %v", err, ErrStoreNotOpen)
 	}
+	if err := store.CreateWorkspaceReservation(ctx, WorkspaceReservation{}); err != ErrStoreNotOpen {
+		t.Fatalf("CreateWorkspaceReservation error = %v, want %v", err, ErrStoreNotOpen)
+	}
 	if _, err := store.GetWorkspace(ctx, "workspace-1"); err != ErrStoreNotOpen {
 		t.Fatalf("GetWorkspace error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.UpdateWorkspace(ctx, WorkspaceRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("UpdateWorkspace error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if _, err := store.ListAcceptedOperations(ctx, 10); err != ErrStoreNotOpen {
+		t.Fatalf("ListAcceptedOperations error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if _, err := store.LeaseOperation(ctx, "op-1", "worker-1", time.Minute); err != ErrStoreNotOpen {
+		t.Fatalf("LeaseOperation error = %v, want %v", err, ErrStoreNotOpen)
+	}
+	if err := store.RecordOperationFailure(ctx, "op-1", context.Canceled); err != ErrStoreNotOpen {
+		t.Fatalf("RecordOperationFailure error = %v, want %v", err, ErrStoreNotOpen)
 	}
 }

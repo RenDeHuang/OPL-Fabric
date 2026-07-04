@@ -39,6 +39,11 @@ type Config struct {
 	CodexModelProvider          string
 	CodexProviderName           string
 	CodexHome                   string
+	WorkerEnabled               string
+	WorkerOwner                 string
+	WorkerInterval              string
+	WorkerLeaseTTL              string
+	WorkerBatchSize             string
 }
 
 func Load() Config {
@@ -79,6 +84,11 @@ func Load() Config {
 		CodexModelProvider:          env("OPL_CODEX_MODEL_PROVIDER", "gflabtoken"),
 		CodexProviderName:           env("OPL_CODEX_PROVIDER_NAME", "gflabtoken"),
 		CodexHome:                   env("CODEX_HOME", "/data/codex"),
+		WorkerEnabled:               env("OPL_FABRIC_WORKER_ENABLED", "false"),
+		WorkerOwner:                 env("OPL_FABRIC_WORKER_OWNER", "fabric-api"),
+		WorkerInterval:              env("OPL_FABRIC_WORKER_INTERVAL", "5s"),
+		WorkerLeaseTTL:              env("OPL_FABRIC_WORKER_LEASE_TTL", "60s"),
+		WorkerBatchSize:             env("OPL_FABRIC_WORKER_BATCH_SIZE", "10"),
 	}
 }
 

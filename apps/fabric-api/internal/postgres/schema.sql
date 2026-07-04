@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS workspace_entries (
   state TEXT NOT NULL,
   host TEXT NOT NULL,
   path TEXT NOT NULL,
+  service_ref TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -58,6 +59,12 @@ CREATE TABLE IF NOT EXISTS fabric_operations (
   resource_id TEXT NOT NULL,
   resource_kind TEXT NOT NULL,
   state TEXT NOT NULL,
+  lease_owner TEXT NOT NULL DEFAULT '',
+  lease_expires_at TIMESTAMPTZ,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT '',
+  provider_refs JSONB NOT NULL DEFAULT '{}'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

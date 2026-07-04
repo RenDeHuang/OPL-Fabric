@@ -20,6 +20,8 @@ type Store interface {
 	UpdateStorageAttachment(context.Context, postgres.StorageAttachmentRow) error
 	GetWorkspaceEntry(context.Context, string) (postgres.WorkspaceEntryRow, error)
 	UpdateWorkspaceEntry(context.Context, postgres.WorkspaceEntryRow) error
+	GetWorkspace(context.Context, string) (postgres.WorkspaceRow, error)
+	UpdateWorkspace(context.Context, postgres.WorkspaceRow) error
 }
 
 type Runtime interface {
@@ -85,6 +87,8 @@ func (o Orchestrator) apply(ctx context.Context, op postgres.OperationRow) error
 		return o.applyStorageAttachment(ctx, op.ResourceID)
 	case "workspace_entry":
 		return o.applyWorkspaceEntry(ctx, op.ResourceID)
+	case "workspace":
+		return o.applyWorkspace(ctx, op.ResourceID)
 	case "compute_destroy":
 		return o.applyComputeDestroy(ctx, op.ResourceID)
 	case "storage_destroy":
@@ -149,6 +153,55 @@ func (o Orchestrator) applyWorkspaceEntry(ctx context.Context, id string) error 
 	}
 	row.State = "ready"
 	return o.Store.UpdateWorkspaceEntry(ctx, row)
+}
+
+func (o Orchestrator) applyWorkspace(ctx context.Context, id string) error {
+	workspace, err := o.Store.GetWorkspace(ctx, id)
+	if err != nil {
+		return err
+	}
+	workspace.State = "provisioning"
+	if err := o.Store.UpdateWorkspace(ctx, workspace); err != nil {
+		return err
+	}
+	if err := o.applyStorageVolume(ctx, workspace.StorageID); err != nil {
+		return err
+	}
+	if err := o.applyComputeResource(ctx, workspace.ComputeID); err != nil {
+		return err
+	}
+	compute, err := o.Store.GetComputeResource(ctx, workspace.ComputeID)
+	if err != nil {
+		return err
+	}
+	storage, err := o.Store.GetStorageVolume(ctx, workspace.StorageID)
+	if err != nil {
+		return err
+	}
+	attachment, err := o.Store.GetStorageAttachment(ctx, workspace.AttachmentID)
+	if err != nil {
+		return err
+	}
+	attachment.ProviderRef = compute.ProviderRef + ":" + storage.ProviderRef
+	if err := o.Store.UpdateStorageAttachment(ctx, attachment); err != nil {
+		return err
+	}
+	if err := o.applyStorageAttachment(ctx, workspace.AttachmentID); err != nil {
+		return err
+	}
+	entry, err := o.Store.GetWorkspaceEntry(ctx, workspace.EntryID)
+	if err != nil {
+		return err
+	}
+	entry.ServiceRef = compute.RuntimeRef
+	if err := o.Store.UpdateWorkspaceEntry(ctx, entry); err != nil {
+		return err
+	}
+	if err := o.applyWorkspaceEntry(ctx, workspace.EntryID); err != nil {
+		return err
+	}
+	workspace.State = "running"
+	return o.Store.UpdateWorkspace(ctx, workspace)
 }
 
 func (o Orchestrator) applyComputeDestroy(ctx context.Context, id string) error {

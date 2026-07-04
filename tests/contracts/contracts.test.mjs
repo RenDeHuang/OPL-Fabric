@@ -10,6 +10,10 @@ const contractFiles = [
   "contracts/fabric-operation-receipt.schema.json",
   "contracts/fabric-resource-catalog.schema.json",
   "contracts/fabric-runtime-supervision.schema.json",
+  "contracts/fabric-storage-volume.schema.json",
+  "contracts/fabric-compute-resource.schema.json",
+  "contracts/fabric-storage-attachment.schema.json",
+  "contracts/fabric-workspace-entry.schema.json",
   "contracts/fabric-workspace.schema.json"
 ];
 
@@ -64,14 +68,18 @@ test("OpenAPI only publishes currently implemented HTTP routes", () => {
   assert.deepEqual(Object.keys(openapi.paths).sort(), [
     "/api/fabric/catalog",
     "/api/fabric/compute-resources",
+    "/api/fabric/compute-resources/{id}",
     "/api/fabric/compute-resources/{id}/destroy",
     "/api/fabric/operations/{id}",
     "/api/fabric/readiness",
     "/api/fabric/storage-attachments",
+    "/api/fabric/storage-attachments/{id}",
     "/api/fabric/storage-attachments/{id}/detach",
     "/api/fabric/storage-volumes",
+    "/api/fabric/storage-volumes/{id}",
     "/api/fabric/storage-volumes/{id}/destroy",
     "/api/fabric/workspace-entries",
+    "/api/fabric/workspace-entries/{id}",
     "/api/fabric/workspaces",
     "/api/fabric/workspaces/{id}"
   ]);
