@@ -217,6 +217,7 @@ func (o Orchestrator) applyComputeDestroy(ctx context.Context, id string) error 
 	row.State = "destroyed"
 	row.ProviderRef = ""
 	row.RuntimeRef = ""
+	row.NodePoolID = ""
 	return o.Store.UpdateComputeResource(ctx, row)
 }
 

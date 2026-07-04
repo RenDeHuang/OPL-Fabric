@@ -12,6 +12,7 @@ import (
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/fabricruntime"
 	httpapi "github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/http"
 	fabrick8s "github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/k8s"
+	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/kubeconfig"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/orchestrator"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/postgres"
 	"github.com/RenDeHuang/OPL-Fabric/apps/fabric-api/internal/service"
@@ -97,7 +98,7 @@ func startWorker(ctx context.Context, cfg config.Config, store *postgres.Store) 
 		log.Printf("fabric worker requested but DATABASE_URL is not configured; worker disabled")
 		return nil
 	}
-	restConfig, err := rest.InClusterConfig()
+	restConfig, err := kubernetesRESTConfig(cfg)
 	if err != nil {
 		return err
 	}
@@ -178,6 +179,10 @@ func parseInt32(value string, fallback int32) int32 {
 func parseBool(value string) bool {
 	parsed, err := strconv.ParseBool(value)
 	return err == nil && parsed
+}
+
+func kubernetesRESTConfig(cfg config.Config) (*rest.Config, error) {
+	return kubeconfig.LoadRESTConfig(cfg.TencentDeployKubeconfigRef)
 }
 
 type capacityAdapter struct {

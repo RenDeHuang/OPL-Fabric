@@ -188,7 +188,7 @@ func TestApplyDestroyOperationsCallRuntimeWithoutDeletingRetainedStorage(t *test
 	store := newMemoryStore()
 	store.operations["op-compute"] = postgres.OperationRow{ID: "op-compute", ResourceKind: "compute_destroy", ResourceID: "compute-1", State: "accepted"}
 	store.operations["op-storage"] = postgres.OperationRow{ID: "op-storage", ResourceKind: "storage_destroy", ResourceID: "storage-1", State: "accepted"}
-	store.compute["compute-1"] = postgres.ComputeResourceRow{ID: "compute-1", State: "running", ProviderRef: "deployment/compute-1"}
+	store.compute["compute-1"] = postgres.ComputeResourceRow{ID: "compute-1", State: "running", ProviderRef: "deployment/compute-1", RuntimeRef: "service/compute-1", NodePoolID: "np-1"}
 	store.storage["storage-1"] = postgres.StorageVolumeRow{ID: "storage-1", State: "available", ProviderRef: "pvc/storage-1", Retained: true}
 	runtime := &recordingRuntime{}
 	orch := Orchestrator{Store: store, Runtime: runtime}
@@ -202,6 +202,9 @@ func TestApplyDestroyOperationsCallRuntimeWithoutDeletingRetainedStorage(t *test
 
 	if store.compute["compute-1"].State != "destroyed" || runtime.destroyedComputeID != "compute-1" {
 		t.Fatalf("compute destroy failed: row=%+v runtime=%q", store.compute["compute-1"], runtime.destroyedComputeID)
+	}
+	if store.compute["compute-1"].ProviderRef != "" || store.compute["compute-1"].RuntimeRef != "" || store.compute["compute-1"].NodePoolID != "" {
+		t.Fatalf("compute refs should be cleared for rebuild: %+v", store.compute["compute-1"])
 	}
 	if store.storage["storage-1"].State != "available" || runtime.destroyedStorageID != "" {
 		t.Fatalf("retained storage should not be destroyed: row=%+v runtime=%q", store.storage["storage-1"], runtime.destroyedStorageID)
