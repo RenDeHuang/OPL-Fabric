@@ -206,7 +206,7 @@ func (p NodePoolProvider) findNodePoolByName(ctx context.Context, client TKEAPI,
 	request.ClusterId = common.StringPtr(p.Config.ClusterID)
 	request.Limit = common.Int64Ptr(100)
 	request.Filters = []*tke.Filter{{
-		Name:   common.StringPtr("NodePoolNames"),
+		Name:   common.StringPtr("NodePoolsName"),
 		Values: []*string{common.StringPtr(name)},
 	}}
 	response, err := client.DescribeNodePoolsWithContext(ctx, request)

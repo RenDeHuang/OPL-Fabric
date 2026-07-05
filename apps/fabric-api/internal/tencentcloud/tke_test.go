@@ -174,7 +174,7 @@ func TestNodePoolProviderReusesExistingComputePoolByInstanceType(t *testing.T) {
 	if client.createRequest != nil {
 		t.Fatalf("existing compute pool must be reused without create: %+v", client.createRequest)
 	}
-	if client.describeRequest == nil || value(client.describeRequest.Filters[0].Name) != "NodePoolNames" || value(client.describeRequest.Filters[0].Values[0]) != "opl-pool-sa5-large4" {
+	if client.describeRequest == nil || value(client.describeRequest.Filters[0].Name) != "NodePoolsName" || value(client.describeRequest.Filters[0].Values[0]) != "opl-pool-sa5-large4" {
 		t.Fatalf("describe request = %+v", client.describeRequest)
 	}
 }
@@ -271,7 +271,7 @@ func (c *fakeTKEClient) CreateNodePoolWithContext(_ context.Context, request *tk
 
 func (c *fakeTKEClient) DescribeNodePoolsWithContext(_ context.Context, request *tke.DescribeNodePoolsRequest) (*tke.DescribeNodePoolsResponse, error) {
 	c.describeRequest = request
-	if len(request.Filters) > 0 && value(request.Filters[0].Name) == "NodePoolNames" {
+	if len(request.Filters) > 0 && value(request.Filters[0].Name) == "NodePoolsName" {
 		return &tke.DescribeNodePoolsResponse{Response: &tke.DescribeNodePoolsResponseParams{NodePools: c.nodePools}}, nil
 	}
 	return &tke.DescribeNodePoolsResponse{Response: &tke.DescribeNodePoolsResponseParams{NodePools: []*tke.NodePool{{NodePoolId: common.StringPtr(c.nodePoolID), LifeState: common.StringPtr(c.lifeState)}}}}, nil
