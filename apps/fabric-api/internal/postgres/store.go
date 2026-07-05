@@ -17,11 +17,15 @@ type Store struct {
 
 const migrationSQL = `
 ALTER TABLE IF EXISTS storage_attachments
-  ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT '';
+  ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS compute_allocation_id TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE IF EXISTS workspace_entries
   ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS service_ref TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE IF EXISTS workspaces
+  ADD COLUMN IF NOT EXISTS compute_allocation_id TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE IF EXISTS fabric_operations
   ADD COLUMN IF NOT EXISTS lease_owner TEXT NOT NULL DEFAULT '',
@@ -30,6 +34,33 @@ ALTER TABLE IF EXISTS fabric_operations
   ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS provider_refs JSONB NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'storage_attachments'
+      AND column_name = 'compute_id'
+  ) THEN
+    UPDATE storage_attachments
+    SET compute_allocation_id = compute_id
+    WHERE compute_allocation_id = '';
+    ALTER TABLE storage_attachments ALTER COLUMN compute_id DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'workspaces'
+      AND column_name = 'compute_id'
+  ) THEN
+    UPDATE workspaces
+    SET compute_allocation_id = compute_id
+    WHERE compute_allocation_id = '';
+    ALTER TABLE workspaces ALTER COLUMN compute_id DROP NOT NULL;
+  END IF;
+END $$;
 `
 
 type OperationRow struct {

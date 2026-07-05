@@ -61,9 +61,12 @@ func TestSchemaContainsPersistenceConstraints(t *testing.T) {
 func TestMigrationSQLBackfillsPhaseTwoColumns(t *testing.T) {
 	required := []string{
 		"ALTER TABLE IF EXISTS storage_attachments",
+		"ALTER TABLE IF EXISTS workspaces",
 		"ALTER TABLE IF EXISTS workspace_entries",
+		"ADD COLUMN IF NOT EXISTS compute_allocation_id TEXT NOT NULL DEFAULT ''",
 		"ADD COLUMN IF NOT EXISTS owner_account_id TEXT NOT NULL DEFAULT ''",
 		"ADD COLUMN IF NOT EXISTS service_ref TEXT NOT NULL DEFAULT ''",
+		"ALTER COLUMN compute_id DROP NOT NULL",
 	}
 	for _, fragment := range required {
 		if !strings.Contains(migrationSQL, fragment) {
