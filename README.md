@@ -63,7 +63,7 @@ npm run test:console
 
 ## Local Development
 
-The Fabric API listens on port `8787` by default and requires `Authorization: Bearer $OPL_OPERATOR_TOKEN` for all HTTP routes.
+The Fabric API listens on port `8787` by default. Fabric API routes require `Authorization: Bearer $OPL_OPERATOR_TOKEN`; `GET /healthz` is intentionally unauthenticated for Kubernetes liveness/readiness probes.
 
 ```bash
 cd apps/fabric-api
@@ -71,6 +71,12 @@ OPL_OPERATOR_TOKEN=dev-operator-token go run ./cmd/fabric-api
 ```
 
 Mutating reservation endpoints require `DATABASE_URL`; when it is configured the API opens PostgreSQL and runs the embedded migration before serving.
+
+Production image builds use the root `Dockerfile`:
+
+```bash
+docker build -t <registry>/opl-fabric:<git-sha> .
+```
 
 The Console-facing product mainline is `POST /api/fabric/workspaces`. It reserves storage, compute allocation intent, storage attachment, Workspace entry, and a Fabric operation in one PostgreSQL transaction, then returns an operation receipt. When `OPL_FABRIC_WORKER_ENABLED=true`, the background worker leases the accepted workspace operation and executes the chain through the orchestrator:
 

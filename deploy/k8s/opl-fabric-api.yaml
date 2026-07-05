@@ -69,11 +69,27 @@ spec:
       serviceAccountName: opl-fabric-api
       containers:
         - name: api
-          image: opl-fabric-api:local
+          image: ${OPL_FABRIC_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8787
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
           env:
             - name: PORT
               value: "8787"

@@ -68,6 +68,26 @@ func TestReadinessEndpoint(t *testing.T) {
 	}
 }
 
+func TestHealthzEndpointDoesNotRequireAuth(t *testing.T) {
+	svc := service.New(testServiceConfig())
+	server := NewServer(svc, Config{OperatorToken: "test-token"})
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
+		t.Fatalf("body = %s, want health status", rec.Body.String())
+	}
+}
+
 func TestCreateStorageVolumeEndpointReturnsAcceptedOperation(t *testing.T) {
 	svc := service.New(testServiceConfig())
 	server := NewServer(svc, Config{OperatorToken: "test-token"})

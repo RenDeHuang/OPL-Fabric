@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+dist
+coverage
+.cache
+.turbo
+tmp
+*.log
+go.work.sum
+apps/fabric-console/node_modules
+apps/fabric-console/dist

@@ -18,16 +18,22 @@ type Config struct {
 func NewServer(svc *service.Service, cfg Config) http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /api/fabric/readiness", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]string{"status": "ok"})
+	})
+
+	api := http.NewServeMux()
+
+	api.HandleFunc("GET /api/fabric/readiness", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, svc.Readiness())
 	})
-	mux.HandleFunc("GET /api/fabric/catalog", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/fabric/catalog", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, svc.Catalog())
 	})
-	mux.HandleFunc("POST /api/fabric/storage-volumes", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/fabric/storage-volumes", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptStorageVolume)
 	})
-	mux.HandleFunc("GET /api/fabric/storage-volumes/{id}", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/fabric/storage-volumes/{id}", func(w http.ResponseWriter, r *http.Request) {
 		resource, err := svc.StorageVolume(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -35,10 +41,10 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 		}
 		writeJSON(w, resource)
 	})
-	mux.HandleFunc("POST /api/fabric/compute-allocations", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/fabric/compute-allocations", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptComputeAllocation)
 	})
-	mux.HandleFunc("GET /api/fabric/compute-allocations/{id}", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/fabric/compute-allocations/{id}", func(w http.ResponseWriter, r *http.Request) {
 		resource, err := svc.ComputeAllocation(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -46,10 +52,10 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 		}
 		writeJSON(w, resource)
 	})
-	mux.HandleFunc("POST /api/fabric/storage-attachments", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/fabric/storage-attachments", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptStorageAttachment)
 	})
-	mux.HandleFunc("GET /api/fabric/storage-attachments/{id}", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/fabric/storage-attachments/{id}", func(w http.ResponseWriter, r *http.Request) {
 		resource, err := svc.StorageAttachment(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -57,10 +63,10 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 		}
 		writeJSON(w, resource)
 	})
-	mux.HandleFunc("POST /api/fabric/workspace-entries", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/fabric/workspace-entries", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptWorkspaceEntry)
 	})
-	mux.HandleFunc("GET /api/fabric/workspace-entries/{id}", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/fabric/workspace-entries/{id}", func(w http.ResponseWriter, r *http.Request) {
 		resource, err := svc.WorkspaceEntry(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -68,10 +74,10 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 		}
 		writeJSON(w, resource)
 	})
-	mux.HandleFunc("POST /api/fabric/workspaces", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/fabric/workspaces", func(w http.ResponseWriter, r *http.Request) {
 		handleMutation(w, r, svc.AcceptWorkspace)
 	})
-	mux.HandleFunc("GET /api/fabric/workspaces/{id}", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/fabric/workspaces/{id}", func(w http.ResponseWriter, r *http.Request) {
 		workspace, err := svc.Workspace(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -79,22 +85,22 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 		}
 		writeJSON(w, workspace)
 	})
-	mux.HandleFunc("POST /api/fabric/compute-allocations/{id}/destroy", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/fabric/compute-allocations/{id}/destroy", func(w http.ResponseWriter, r *http.Request) {
 		handleConfirmedMutation(w, r, func(headers service.MutationHeaders, req service.ConfirmRequest) (service.OperationReceipt, error) {
 			return svc.AcceptComputeAllocationDestroy(r.Context(), headers, r.PathValue("id"), req)
 		})
 	})
-	mux.HandleFunc("POST /api/fabric/storage-volumes/{id}/destroy", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/fabric/storage-volumes/{id}/destroy", func(w http.ResponseWriter, r *http.Request) {
 		handleConfirmedMutation(w, r, func(headers service.MutationHeaders, req service.ConfirmRequest) (service.OperationReceipt, error) {
 			return svc.AcceptStorageDestroy(r.Context(), headers, r.PathValue("id"), req)
 		})
 	})
-	mux.HandleFunc("POST /api/fabric/storage-attachments/{id}/detach", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/fabric/storage-attachments/{id}/detach", func(w http.ResponseWriter, r *http.Request) {
 		handleConfirmedMutation(w, r, func(headers service.MutationHeaders, req service.ConfirmRequest) (service.OperationReceipt, error) {
 			return svc.AcceptAttachmentDetach(r.Context(), headers, r.PathValue("id"), req)
 		})
 	})
-	mux.HandleFunc("GET /api/fabric/operations/{id}", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/fabric/operations/{id}", func(w http.ResponseWriter, r *http.Request) {
 		receipt, err := svc.Operation(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -103,7 +109,8 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 		writeJSON(w, receipt)
 	})
 
-	return requireOperatorToken(cfg.OperatorToken, mux)
+	mux.Handle("/", requireOperatorToken(cfg.OperatorToken, api))
+	return mux
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

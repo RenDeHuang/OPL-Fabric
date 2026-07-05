@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const contractFiles = [
@@ -133,4 +133,24 @@ test("staging live e2e prewarms compute pools and allows TKE cold start", () => 
   assert.equal(desiredPodNumber, "1");
   assert.match(e2eTimeout || "", /^[6-9]\d?m$/);
   assert.ok(Number(jobTimeout) >= 90, "job timeout must leave room for live cleanup after TKE cold starts");
+});
+
+test("fabric api has production container build files", () => {
+  assert.ok(existsSync("Dockerfile"), "root Dockerfile is required for opl-cloud-deploy image builds");
+  assert.ok(existsSync(".dockerignore"), ".dockerignore is required for stable deploy build contexts");
+
+  const dockerfile = readFileSync("Dockerfile", "utf8");
+  assert.match(dockerfile, /FROM\s+golang:/, "Dockerfile must build the Go API from source");
+  assert.match(dockerfile, /go\s+build\s+.*\.\/cmd\/fabric-api/, "Dockerfile must build cmd/fabric-api");
+  assert.match(dockerfile, /USER\s+65532:65532/, "runtime image must run as non-root");
+  assert.match(dockerfile, /EXPOSE\s+8787/, "runtime image must expose Fabric API port");
+});
+
+test("k8s deployment uses deployable fabric image and unauthenticated health probes", () => {
+  const manifest = readFileSync("deploy/k8s/opl-fabric-api.yaml", "utf8");
+
+  assert.doesNotMatch(manifest, /image:\s+opl-fabric-api:local/, "deployment must not use local-only image tag");
+  assert.match(manifest, /image:\s+\$\{OPL_FABRIC_IMAGE\}/, "deployment image must be supplied by opl-cloud-deploy");
+  assert.match(manifest, /livenessProbe:[\s\S]*path:\s+\/healthz/, "deployment must expose liveness probe on /healthz");
+  assert.match(manifest, /readinessProbe:[\s\S]*path:\s+\/healthz/, "deployment must expose readiness probe on /healthz");
 });
