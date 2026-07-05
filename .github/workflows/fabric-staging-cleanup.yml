@@ -1,0 +1,89 @@
+name: Fabric Staging Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_cleanup:
+        description: "Type DELETE to remove Fabric staging runtime resources and NodePools"
+        required: true
+        default: ""
+        type: string
+      nodepool_ids:
+        description: "Comma-separated extra Tencent TKE NodePool IDs to delete"
+        required: false
+        default: "np-0kpu5pdi,np-gxhhcpna,np-o186c59a,np-c2emkmn2,np-oxidc0mw"
+        type: string
+
+jobs:
+  staging-cleanup:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TENCENT_DEPLOY_KUBECONFIG_B64: ${{ secrets.TENCENT_DEPLOY_KUBECONFIG_B64 }}
+      TENCENT_MUTATION_SECRET_ID: ${{ secrets.TENCENT_MUTATION_SECRET_ID }}
+      TENCENT_MUTATION_SECRET_KEY: ${{ secrets.TENCENT_MUTATION_SECRET_KEY }}
+
+      OPL_K8S_NAMESPACE: oplfabric
+      TENCENT_DEPLOY_CLUSTER_ID: cls-fi097sy4
+      TENCENT_TKE_REGION: na-siliconvalley
+      OPL_STAGING_CLEANUP_CONFIRM: ${{ inputs.confirm_cleanup }}
+      OPL_STAGING_CLEANUP_NODEPOOL_IDS: ${{ inputs.nodepool_ids }}
+      OPL_STAGING_CLEANUP_TIMEOUT: 30m
+    steps:
+      - name: Refuse unconfirmed cleanup
+        if: ${{ inputs.confirm_cleanup != 'DELETE' }}
+        shell: bash
+        run: |
+          echo "::error::Staging cleanup requires confirm_cleanup=DELETE."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/fabric-api/go.mod
+          cache-dependency-path: apps/fabric-api/go.sum
+
+      - name: Decode kubeconfig without printing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubeconfig="$RUNNER_TEMP/fabric-kubeconfig"
+          raw="$RUNNER_TEMP/fabric-kubeconfig-secret"
+          printf '%s' "$TENCENT_DEPLOY_KUBECONFIG_B64" > "$raw"
+          if grep -q '^apiVersion:' "$raw"; then
+            cp "$raw" "$kubeconfig"
+          else
+            tr -d '\r\n\t ' < "$raw" | base64 -d > "$kubeconfig"
+          fi
+          test -s "$kubeconfig"
+          grep -q '^current-context:' "$kubeconfig"
+          grep -q 'server:' "$kubeconfig"
+          echo "TENCENT_DEPLOY_KUBECONFIG_REF=$kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Verify required secret injection
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in \
+            DATABASE_URL \
+            TENCENT_DEPLOY_KUBECONFIG_REF \
+            TENCENT_MUTATION_SECRET_ID \
+            TENCENT_MUTATION_SECRET_KEY
+          do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::$key is missing"
+              exit 1
+            fi
+            echo "$key=set"
+          done
+
+      - name: Run Fabric staging cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/fabric-api
+          go run ./cmd/fabric-staging-cleanup
