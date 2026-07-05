@@ -283,18 +283,19 @@ func (s *Service) AcceptComputeAllocation(ctx context.Context, headers MutationH
 		return OperationReceipt{}, err
 	}
 	resourceID := stableID("computealloc", headers.IdempotencyKey)
-	shapeJSON, err := json.Marshal(req.ComputeShape)
+	productPresetID := defaultString(req.ProductPresetID, "basic")
+	shapeJSON, err := json.Marshal(s.computeShape(req.ComputeShape, productPresetID))
 	if err != nil {
 		return OperationReceipt{}, err
 	}
 	if err := s.store.CreateComputeAllocation(ctx, postgres.ComputeAllocationRow{
 		ID:                   resourceID,
 		OwnerAccountID:       req.AccountID,
-		ProductPresetID:      req.ProductPresetID,
+		ProductPresetID:      productPresetID,
 		ComputeShapeJSON:     string(shapeJSON),
 		ProviderInstanceType: req.ProviderInstanceType,
-		CapacityPoolID:       req.CapacityPoolID,
-		IsolationMode:        req.IsolationMode,
+		CapacityPoolID:       s.capacityPoolID(req.CapacityPoolID, productPresetID),
+		IsolationMode:        defaultString(req.IsolationMode, "workspace_exclusive_cvm"),
 		State:                "creating",
 	}); err != nil {
 		return OperationReceipt{}, err
@@ -359,7 +360,7 @@ func (s *Service) AcceptWorkspace(ctx context.Context, headers MutationHeaders, 
 		sizeGB = 10
 	}
 	productPresetID := defaultString(req.ProductPresetID, "basic")
-	shapeJSON, err := json.Marshal(req.ComputeShape)
+	shapeJSON, err := json.Marshal(s.computeShape(req.ComputeShape, productPresetID))
 	if err != nil {
 		return OperationReceipt{}, err
 	}
@@ -374,7 +375,7 @@ func (s *Service) AcceptWorkspace(ctx context.Context, headers MutationHeaders, 
 			State:          "accepted",
 		},
 		Storage:    postgres.StorageVolumeRow{ID: storageID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, State: "creating", SizeGB: sizeGB, Retained: true},
-		Compute:    postgres.ComputeAllocationRow{ID: computeAllocationID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, ComputeShapeJSON: string(shapeJSON), ProviderInstanceType: req.ProviderInstanceType, CapacityPoolID: req.CapacityPoolID, IsolationMode: req.IsolationMode, State: "creating"},
+		Compute:    postgres.ComputeAllocationRow{ID: computeAllocationID, OwnerAccountID: req.AccountID, ProductPresetID: productPresetID, ComputeShapeJSON: string(shapeJSON), ProviderInstanceType: req.ProviderInstanceType, CapacityPoolID: s.capacityPoolID(req.CapacityPoolID, productPresetID), IsolationMode: defaultString(req.IsolationMode, "workspace_exclusive_cvm"), State: "creating"},
 		Attachment: postgres.StorageAttachmentRow{ID: attachmentID, OwnerAccountID: req.AccountID, ComputeAllocationID: computeAllocationID, StorageID: storageID, State: "attaching", MountPath: "/data"},
 		Entry:      postgres.WorkspaceEntryRow{ID: entryID, OwnerAccountID: req.AccountID, WorkspaceID: workspaceID, AttachmentID: attachmentID, State: "creating", Host: s.workspaceDomain, Path: "/w/" + workspaceID + "/"},
 		Workspace:  postgres.WorkspaceRow{ID: workspaceID, OwnerAccountID: req.AccountID, WorkspaceName: req.WorkspaceName, ProductPresetID: productPresetID, StorageID: storageID, ComputeAllocationID: computeAllocationID, AttachmentID: attachmentID, EntryID: entryID, OperationID: operationID, State: "provisioning"},
@@ -532,6 +533,37 @@ func (s *Service) acceptOperation(ctx context.Context, headers MutationHeaders, 
 func stableID(prefix, key string) string {
 	sum := sha256.Sum256([]byte(prefix + ":" + key))
 	return prefix + "-" + hex.EncodeToString(sum[:])[:16]
+}
+
+func (s *Service) computeShape(shape map[string]any, productPresetID string) map[string]any {
+	if len(shape) > 0 {
+		return shape
+	}
+	preset, ok := s.productPreset(productPresetID)
+	if !ok {
+		return map[string]any{"cpu": 2, "memoryGb": 4, "gpu": 0}
+	}
+	return map[string]any{"cpu": preset.DefaultCPU, "memoryGb": preset.DefaultMemoryGB, "gpu": preset.DefaultGPU}
+}
+
+func (s *Service) capacityPoolID(value, productPresetID string) string {
+	if value != "" {
+		return value
+	}
+	preset, ok := s.productPreset(productPresetID)
+	if ok && preset.Accelerator == "gpu" {
+		return "tencent-gpu-compute-pool"
+	}
+	return "tencent-cpu-compute-pool"
+}
+
+func (s *Service) productPreset(id string) (catalog.ProductPreset, bool) {
+	for _, preset := range s.catalog.ProductPresets {
+		if preset.ID == id {
+			return preset, true
+		}
+	}
+	return catalog.ProductPreset{}, false
 }
 
 func defaultString(value, fallback string) string {

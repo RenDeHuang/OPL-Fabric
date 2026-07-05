@@ -14,20 +14,7 @@ type KubernetesRuntime struct {
 }
 
 type CapacityProvider interface {
-	EnsureNodePool(context.Context, CapacityNodePoolRequest) (CapacityNodePoolResult, error)
 	VerifyNodePool(context.Context, string) (bool, error)
-	DeleteNodePool(context.Context, string) error
-}
-
-type CapacityNodePoolRequest struct {
-	ComputeAllocationID       string
-	WorkspaceID               string
-	RequestedComputeShapeJSON string
-	ProviderInstanceType      string
-}
-
-type CapacityNodePoolResult struct {
-	NodePoolID string
 }
 
 func (r KubernetesRuntime) CreateStorageVolume(ctx context.Context, row postgres.StorageVolumeRow) (orchestrator.RuntimeStorageResult, error) {

@@ -108,6 +108,19 @@ func startWorker(ctx context.Context, cfg config.Config, store *postgres.Store) 
 	if err != nil {
 		return err
 	}
+	capacity := capacityAdapter{provider: tencentcloud.NodePoolProvider{Config: tencentcloud.NodePoolResolverConfig{
+		ClusterID:          cfg.TencentDeployClusterID,
+		Region:             cfg.TencentTKERegion,
+		SecretID:           cfg.TencentMutationSecretID,
+		SecretKey:          cfg.TencentMutationSecretKey,
+		SubnetIDs:          cfg.TencentCVMSubnetIDs,
+		SecurityGroupIDs:   cfg.TencentCVMSecurityGroupIDs,
+		SystemDiskType:     cfg.TencentCVMSystemDiskType,
+		SystemDiskSizeGB:   cfg.TencentCVMSystemDiskSizeGB,
+		InstanceChargeType: cfg.TKEInstanceChargeType,
+		DesiredPodNumber:   cfg.TKENodePoolDesiredPodNumber,
+		MutationAllowed:    parseBool(cfg.TKEAllowNodePoolMutation),
+	}}}
 	runtime := fabricruntime.KubernetesRuntime{
 		Provider: fabrick8s.Provider{
 			Client:               client,
@@ -128,21 +141,9 @@ func startWorker(ctx context.Context, cfg config.Config, store *postgres.Store) 
 			CodexModelProvider:   cfg.CodexModelProvider,
 			CodexProviderName:    cfg.CodexProviderName,
 		},
-		Capacity: capacityAdapter{provider: tencentcloud.NodePoolProvider{Config: tencentcloud.NodePoolResolverConfig{
-			ClusterID:          cfg.TencentDeployClusterID,
-			Region:             cfg.TencentTKERegion,
-			SecretID:           cfg.TencentMutationSecretID,
-			SecretKey:          cfg.TencentMutationSecretKey,
-			SubnetIDs:          cfg.TencentCVMSubnetIDs,
-			SecurityGroupIDs:   cfg.TencentCVMSecurityGroupIDs,
-			SystemDiskType:     cfg.TencentCVMSystemDiskType,
-			SystemDiskSizeGB:   cfg.TencentCVMSystemDiskSizeGB,
-			InstanceChargeType: cfg.TKEInstanceChargeType,
-			DesiredPodNumber:   cfg.TKENodePoolDesiredPodNumber,
-			MutationAllowed:    parseBool(cfg.TKEAllowNodePoolMutation),
-		}}},
+		Capacity: capacity,
 	}
-	orch := orchestrator.Orchestrator{Store: store, Runtime: runtime}
+	orch := orchestrator.Orchestrator{Store: store, Runtime: runtime, ComputePools: capacity}
 	w := worker.Worker{
 		Store:        store,
 		Orchestrator: orch,
@@ -194,23 +195,20 @@ type capacityAdapter struct {
 	provider tencentcloud.NodePoolProvider
 }
 
-func (a capacityAdapter) EnsureNodePool(ctx context.Context, req fabricruntime.CapacityNodePoolRequest) (fabricruntime.CapacityNodePoolResult, error) {
+func (a capacityAdapter) ResolveComputePool(ctx context.Context, req orchestrator.ComputePoolRequest) (orchestrator.ComputePoolResult, error) {
 	result, err := a.provider.EnsureNodePool(ctx, tencentcloud.NodePoolRequest{
 		ComputeAllocationID:       req.ComputeAllocationID,
 		WorkspaceID:               req.WorkspaceID,
-		RequestedComputeShapeJSON: req.RequestedComputeShapeJSON,
+		RequestedComputeShapeJSON: req.ComputeShapeJSON,
 		ProviderInstanceType:      req.ProviderInstanceType,
+		CapacityPoolID:            req.CapacityPoolID,
 	})
 	if err != nil {
-		return fabricruntime.CapacityNodePoolResult{}, err
+		return orchestrator.ComputePoolResult{}, err
 	}
-	return fabricruntime.CapacityNodePoolResult{NodePoolID: result.NodePoolID}, nil
+	return orchestrator.ComputePoolResult{NodePoolID: result.NodePoolID}, nil
 }
 
 func (a capacityAdapter) VerifyNodePool(ctx context.Context, nodePoolID string) (bool, error) {
 	return a.provider.VerifyNodePool(ctx, nodePoolID)
-}
-
-func (a capacityAdapter) DeleteNodePool(ctx context.Context, nodePoolID string) error {
-	return a.provider.DeleteNodePool(ctx, nodePoolID)
 }

@@ -155,6 +155,74 @@ func TestApplyWorkspaceOperationRunsStorageComputeAttachmentEntryInOrder(t *test
 	}
 }
 
+func TestApplyWorkspaceOperationResolvesComputePoolBeforeCreatingCompute(t *testing.T) {
+	store := newMemoryStore()
+	store.operations["op-workspace"] = postgres.OperationRow{ID: "op-workspace", ResourceKind: "workspace", ResourceID: "ws-1", State: "accepted"}
+	store.storage["storage-1"] = postgres.StorageVolumeRow{ID: "storage-1", OwnerAccountID: "acct-1", SizeGB: 20, State: "creating", Retained: true}
+	store.compute["compute-1"] = postgres.ComputeAllocationRow{
+		ID:                   "compute-1",
+		OwnerAccountID:       "acct-1",
+		ProductPresetID:      "basic",
+		State:                "creating",
+		ComputeShapeJSON:     `{"cpu":2,"memoryGb":4}`,
+		ProviderInstanceType: "SA5.LARGE4",
+		CapacityPoolID:       "tencent-cpu-compute-pool",
+		IsolationMode:        "workspace_exclusive_cvm",
+	}
+	store.attachments["attach-1"] = postgres.StorageAttachmentRow{ID: "attach-1", OwnerAccountID: "acct-1", ComputeAllocationID: "compute-1", StorageID: "storage-1", State: "attaching", MountPath: "/data"}
+	store.entries["entry-1"] = postgres.WorkspaceEntryRow{ID: "entry-1", OwnerAccountID: "acct-1", WorkspaceID: "ws-1", AttachmentID: "attach-1", State: "creating", Host: "workspace.medopl.cn", Path: "/w/ws-1/"}
+	store.workspaces["ws-1"] = postgres.WorkspaceRow{ID: "ws-1", OwnerAccountID: "acct-1", StorageID: "storage-1", ComputeAllocationID: "compute-1", AttachmentID: "attach-1", EntryID: "entry-1", OperationID: "op-workspace", State: "provisioning"}
+	runtime := &recordingRuntime{}
+	resolver := &recordingComputePoolResolver{nodePoolID: "np-basic-2c4g"}
+	orch := Orchestrator{Store: store, Runtime: runtime, ComputePools: resolver}
+
+	if _, err := orch.Apply(context.Background(), "op-workspace"); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	if resolver.computeAllocationID != "compute-1" || resolver.workspaceID != "ws-1" || resolver.providerInstanceType != "SA5.LARGE4" {
+		t.Fatalf("resolver = %+v", resolver)
+	}
+	if store.compute["compute-1"].NodePoolID != "np-basic-2c4g" {
+		t.Fatalf("stored node pool id = %q", store.compute["compute-1"].NodePoolID)
+	}
+	if runtime.createdNodePoolID != "np-basic-2c4g" {
+		t.Fatalf("runtime node pool id = %q", runtime.createdNodePoolID)
+	}
+	if store.workspaces["ws-1"].State != "running" {
+		t.Fatalf("workspace row = %+v", store.workspaces["ws-1"])
+	}
+}
+
+func TestApplyWorkspaceOperationFailsWhenComputePoolResolverReturnsNoNodePoolID(t *testing.T) {
+	store := newMemoryStore()
+	store.operations["op-workspace"] = postgres.OperationRow{ID: "op-workspace", ResourceKind: "workspace", ResourceID: "ws-1", State: "accepted"}
+	store.storage["storage-1"] = postgres.StorageVolumeRow{ID: "storage-1", OwnerAccountID: "acct-1", SizeGB: 20, State: "creating", Retained: true}
+	store.compute["compute-1"] = postgres.ComputeAllocationRow{
+		ID:                   "compute-1",
+		OwnerAccountID:       "acct-1",
+		ProductPresetID:      "basic",
+		State:                "creating",
+		ComputeShapeJSON:     `{"cpu":2,"memoryGb":4}`,
+		ProviderInstanceType: "SA5.LARGE4",
+		CapacityPoolID:       "tencent-cpu-compute-pool",
+		IsolationMode:        "workspace_exclusive_cvm",
+	}
+	store.attachments["attach-1"] = postgres.StorageAttachmentRow{ID: "attach-1", OwnerAccountID: "acct-1", ComputeAllocationID: "compute-1", StorageID: "storage-1", State: "attaching", MountPath: "/data"}
+	store.entries["entry-1"] = postgres.WorkspaceEntryRow{ID: "entry-1", OwnerAccountID: "acct-1", WorkspaceID: "ws-1", AttachmentID: "attach-1", State: "creating", Host: "workspace.medopl.cn", Path: "/w/ws-1/"}
+	store.workspaces["ws-1"] = postgres.WorkspaceRow{ID: "ws-1", OwnerAccountID: "acct-1", StorageID: "storage-1", ComputeAllocationID: "compute-1", AttachmentID: "attach-1", EntryID: "entry-1", OperationID: "op-workspace", State: "provisioning"}
+	runtime := &recordingRuntime{}
+	orch := Orchestrator{Store: store, Runtime: runtime, ComputePools: &recordingComputePoolResolver{}}
+
+	_, err := orch.Apply(context.Background(), "op-workspace")
+	if err == nil || err.Error() != "compute_pool_not_resolved" {
+		t.Fatalf("Apply error = %v, want compute_pool_not_resolved", err)
+	}
+	if runtime.createdComputeAllocationID != "" {
+		t.Fatalf("compute must not be created before compute pool is resolved: %+v", runtime)
+	}
+}
+
 func TestApplyWorkspaceOperationFailureLeavesStorageRetained(t *testing.T) {
 	store := newMemoryStore()
 	store.operations["op-workspace"] = postgres.OperationRow{ID: "op-workspace", ResourceKind: "workspace", ResourceID: "ws-1", State: "accepted"}
@@ -326,6 +394,7 @@ type recordingRuntime struct {
 	calls                        []string
 	createdStorageID             string
 	createdComputeAllocationID   string
+	createdNodePoolID            string
 	attachedID                   string
 	workspaceEntryID             string
 	workspaceEntryServiceRef     string
@@ -352,6 +421,7 @@ func (r *recordingRuntime) CreateCompute(_ context.Context, row postgres.Compute
 	}
 	r.calls = append(r.calls, "compute:"+row.ID)
 	r.createdComputeAllocationID = row.ID
+	r.createdNodePoolID = row.NodePoolID
 	return RuntimeComputeResult{ProviderRef: "deployment/" + row.ID, RuntimeRef: "service/" + row.ID, NodePoolID: r.nodePoolID}, nil
 }
 
@@ -396,4 +466,18 @@ func (r *recordingRuntime) DetachStorage(_ context.Context, row postgres.Storage
 	}
 	r.detachedID = row.ID
 	return nil
+}
+
+type recordingComputePoolResolver struct {
+	nodePoolID           string
+	computeAllocationID  string
+	workspaceID          string
+	providerInstanceType string
+}
+
+func (r *recordingComputePoolResolver) ResolveComputePool(_ context.Context, req ComputePoolRequest) (ComputePoolResult, error) {
+	r.computeAllocationID = req.ComputeAllocationID
+	r.workspaceID = req.WorkspaceID
+	r.providerInstanceType = req.ProviderInstanceType
+	return ComputePoolResult{NodePoolID: r.nodePoolID}, nil
 }

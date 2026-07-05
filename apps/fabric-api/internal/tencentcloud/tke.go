@@ -2,6 +2,8 @@ package tencentcloud
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strconv"
 	"strings"
@@ -67,6 +69,7 @@ type NodePoolRequest struct {
 	WorkspaceID               string
 	RequestedComputeShapeJSON string
 	ProviderInstanceType      string
+	CapacityPoolID            string
 }
 
 type NodePoolResult struct {
@@ -121,9 +124,6 @@ func ResolveNodePoolPlan(cfg NodePoolResolverConfig) (NodePoolPlan, error) {
 }
 
 func (p NodePoolProvider) EnsureNodePool(ctx context.Context, req NodePoolRequest) (NodePoolResult, error) {
-	if !p.Config.MutationAllowed {
-		return NodePoolResult{}, ErrNodePoolMutationNotAllowed
-	}
 	plan, err := ResolveNodePoolPlan(NodePoolResolverConfig{
 		ClusterID:                 p.Config.ClusterID,
 		Region:                    p.Config.Region,
@@ -144,18 +144,29 @@ func (p NodePoolProvider) EnsureNodePool(ctx context.Context, req NodePoolReques
 	if strings.TrimSpace(req.ProviderInstanceType) == "" {
 		return NodePoolResult{}, ErrMissingNodePoolConfig
 	}
+	poolName := computePoolName(req)
 	client, err := p.client()
 	if err != nil {
 		return NodePoolResult{}, err
 	}
+	existingID, err := p.findNodePoolByName(ctx, client, poolName)
+	if err != nil {
+		return NodePoolResult{}, err
+	}
+	if existingID != "" {
+		return NodePoolResult{NodePoolID: existingID}, nil
+	}
+	if !p.Config.MutationAllowed {
+		return NodePoolResult{}, ErrNodePoolMutationNotAllowed
+	}
 	request := tke.NewCreateNodePoolRequest()
 	request.ClusterId = common.StringPtr(plan.ClusterID)
-	request.Name = common.StringPtr(nodePoolName(req.ComputeAllocationID))
+	request.Name = common.StringPtr(poolName)
 	request.Type = common.StringPtr("Native")
 	request.DeletionProtection = common.BoolPtr(false)
 	request.Labels = []*tke.Label{
-		{Name: common.StringPtr("oplfabric.cn/compute-id"), Value: common.StringPtr(req.ComputeAllocationID)},
-		{Name: common.StringPtr("oplfabric.cn/workspace-id"), Value: common.StringPtr(req.WorkspaceID)},
+		{Name: common.StringPtr("oplfabric.cn/capacity-model"), Value: common.StringPtr("compute-pool")},
+		{Name: common.StringPtr("oplfabric.cn/capacity-pool-id"), Value: common.StringPtr(req.CapacityPoolID)},
 		{Name: common.StringPtr("oplfabric.cn/instance-type"), Value: common.StringPtr(req.ProviderInstanceType)},
 	}
 	request.Native = &tke.CreateNativeNodePoolParam{
@@ -188,6 +199,33 @@ func (p NodePoolProvider) EnsureNodePool(ctx context.Context, req NodePoolReques
 		return NodePoolResult{}, ErrMissingNodePoolConfig
 	}
 	return NodePoolResult{NodePoolID: *response.Response.NodePoolId}, nil
+}
+
+func (p NodePoolProvider) findNodePoolByName(ctx context.Context, client TKEAPI, name string) (string, error) {
+	request := tke.NewDescribeNodePoolsRequest()
+	request.ClusterId = common.StringPtr(p.Config.ClusterID)
+	request.Limit = common.Int64Ptr(100)
+	request.Filters = []*tke.Filter{{
+		Name:   common.StringPtr("NodePoolNames"),
+		Values: []*string{common.StringPtr(name)},
+	}}
+	response, err := client.DescribeNodePoolsWithContext(ctx, request)
+	if err != nil {
+		return "", err
+	}
+	if response == nil || response.Response == nil {
+		return "", nil
+	}
+	for _, pool := range response.Response.NodePools {
+		if pool == nil || pool.NodePoolId == nil || *pool.NodePoolId == "" {
+			continue
+		}
+		if pool.Name != nil && *pool.Name != name {
+			continue
+		}
+		return *pool.NodePoolId, nil
+	}
+	return "", nil
 }
 
 func (p NodePoolProvider) VerifyNodePool(ctx context.Context, nodePoolID string) (bool, error) {
@@ -257,11 +295,37 @@ func defaultString(value, fallback string) string {
 	return value
 }
 
-func nodePoolName(computeID string) string {
-	if computeID == "" {
-		return "opl-workspace"
+func computePoolName(req NodePoolRequest) string {
+	key := strings.TrimSpace(req.ProviderInstanceType)
+	if key == "" {
+		key = strings.TrimSpace(req.CapacityPoolID)
 	}
-	return "opl-" + computeID
+	if key == "" {
+		key = shortHash(req.RequestedComputeShapeJSON)
+	}
+	clean := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			return r
+		}
+		if r >= 'A' && r <= 'Z' {
+			return r + ('a' - 'A')
+		}
+		return '-'
+	}, key)
+	clean = strings.Trim(strings.Join(strings.FieldsFunc(clean, func(r rune) bool { return r == '-' }), "-"), "-")
+	if clean == "" {
+		clean = "workspace"
+	}
+	name := "opl-pool-" + clean
+	if len(name) > 60 {
+		name = name[:51] + "-" + shortHash(key)
+	}
+	return name
+}
+
+func shortHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])[:8]
 }
 
 func splitCSV(value string) []string {

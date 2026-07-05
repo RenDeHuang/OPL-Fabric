@@ -128,12 +128,54 @@ func TestNodePoolProviderRequiresMutationGateForCreateAndDelete(t *testing.T) {
 		},
 	}
 
-	_, err := provider.EnsureNodePool(context.Background(), NodePoolRequest{ComputeAllocationID: "compute-1"})
+	_, err := provider.EnsureNodePool(context.Background(), NodePoolRequest{ComputeAllocationID: "compute-1", ProviderInstanceType: "SA5.LARGE4"})
 	if !errors.Is(err, ErrNodePoolMutationNotAllowed) {
 		t.Fatalf("EnsureNodePool error = %v, want %v", err, ErrNodePoolMutationNotAllowed)
 	}
 	if err := provider.DeleteNodePool(context.Background(), "np-1"); !errors.Is(err, ErrNodePoolMutationNotAllowed) {
 		t.Fatalf("DeleteNodePool error = %v, want %v", err, ErrNodePoolMutationNotAllowed)
+	}
+}
+
+func TestNodePoolProviderReusesExistingComputePoolByInstanceType(t *testing.T) {
+	client := &fakeTKEClient{
+		nodePools: []*tke.NodePool{{
+			NodePoolId: common.StringPtr("np-existing"),
+			Name:       common.StringPtr("opl-pool-sa5-large4"),
+			LifeState:  common.StringPtr("normal"),
+		}},
+	}
+	provider := NodePoolProvider{
+		Client: client,
+		Config: NodePoolResolverConfig{
+			ClusterID:        "cls-example",
+			Region:           "ap-guangzhou",
+			SecretID:         "secret-id",
+			SecretKey:        "secret-key",
+			SubnetIDs:        "subnet-1",
+			SecurityGroupIDs: "sg-1",
+			MutationAllowed:  false,
+		},
+	}
+
+	result, err := provider.EnsureNodePool(context.Background(), NodePoolRequest{
+		ComputeAllocationID:       "compute-1",
+		WorkspaceID:               "ws-1",
+		RequestedComputeShapeJSON: `{"cpu":2,"memoryGb":4}`,
+		ProviderInstanceType:      "SA5.LARGE4",
+		CapacityPoolID:            "tencent-cpu-compute-pool",
+	})
+	if err != nil {
+		t.Fatalf("EnsureNodePool: %v", err)
+	}
+	if result.NodePoolID != "np-existing" {
+		t.Fatalf("NodePoolID = %q, want np-existing", result.NodePoolID)
+	}
+	if client.createRequest != nil {
+		t.Fatalf("existing compute pool must be reused without create: %+v", client.createRequest)
+	}
+	if client.describeRequest == nil || value(client.describeRequest.Filters[0].Name) != "NodePoolNames" || value(client.describeRequest.Filters[0].Values[0]) != "opl-pool-sa5-large4" {
+		t.Fatalf("describe request = %+v", client.describeRequest)
 	}
 }
 
@@ -161,6 +203,7 @@ func TestNodePoolProviderCreatesVerifiesAndDeletesNodePool(t *testing.T) {
 		WorkspaceID:               "ws-1",
 		RequestedComputeShapeJSON: `{"cpu":4,"memoryGb":8}`,
 		ProviderInstanceType:      "SA5.LARGE8",
+		CapacityPoolID:            "tencent-cpu-compute-pool",
 	})
 	if err != nil {
 		t.Fatalf("EnsureNodePool: %v", err)
@@ -168,7 +211,7 @@ func TestNodePoolProviderCreatesVerifiesAndDeletesNodePool(t *testing.T) {
 	if result.NodePoolID != "np-created" {
 		t.Fatalf("NodePoolID = %q", result.NodePoolID)
 	}
-	if client.createRequest == nil || value(client.createRequest.ClusterId) != "cls-example" || value(client.createRequest.Name) != "opl-compute-1" {
+	if client.createRequest == nil || value(client.createRequest.ClusterId) != "cls-example" || value(client.createRequest.Name) != "opl-pool-sa5-large8" {
 		t.Fatalf("create request = %+v", client.createRequest)
 	}
 	if value(client.createRequest.Type) != "Native" {
@@ -215,6 +258,7 @@ func TestNodePoolProviderCreatesVerifiesAndDeletesNodePool(t *testing.T) {
 type fakeTKEClient struct {
 	nodePoolID      string
 	lifeState       string
+	nodePools       []*tke.NodePool
 	createRequest   *tke.CreateNodePoolRequest
 	describeRequest *tke.DescribeNodePoolsRequest
 	deleteRequest   *tke.DeleteNodePoolRequest
@@ -227,6 +271,9 @@ func (c *fakeTKEClient) CreateNodePoolWithContext(_ context.Context, request *tk
 
 func (c *fakeTKEClient) DescribeNodePoolsWithContext(_ context.Context, request *tke.DescribeNodePoolsRequest) (*tke.DescribeNodePoolsResponse, error) {
 	c.describeRequest = request
+	if len(request.Filters) > 0 && value(request.Filters[0].Name) == "NodePoolNames" {
+		return &tke.DescribeNodePoolsResponse{Response: &tke.DescribeNodePoolsResponseParams{NodePools: c.nodePools}}, nil
+	}
 	return &tke.DescribeNodePoolsResponse{Response: &tke.DescribeNodePoolsResponseParams{NodePools: []*tke.NodePool{{NodePoolId: common.StringPtr(c.nodePoolID), LifeState: common.StringPtr(c.lifeState)}}}}, nil
 }
 

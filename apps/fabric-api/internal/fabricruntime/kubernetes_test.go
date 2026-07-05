@@ -79,7 +79,7 @@ func TestKubernetesRuntimeRequiresResolvedComputePoolForWorkspaceExclusiveComput
 	if !errors.Is(err, ErrComputePoolRequired) {
 		t.Fatalf("CreateCompute error = %v, want %v", err, ErrComputePoolRequired)
 	}
-	if capacity.createdComputeAllocationID != "" || capacity.verifiedNodePoolID != "" {
+	if capacity.verifiedNodePoolID != "" {
 		t.Fatalf("capacity = %+v", capacity)
 	}
 }
@@ -92,7 +92,7 @@ func TestKubernetesRuntimeSkipsCapacityWhenComputeIsNotWorkspaceExclusive(t *tes
 	if _, err := runtime.CreateCompute(context.Background(), postgres.ComputeAllocationRow{ID: "compute-1"}); err != nil {
 		t.Fatalf("CreateCompute: %v", err)
 	}
-	if capacity.createdComputeAllocationID != "" {
+	if capacity.verifiedNodePoolID != "" {
 		t.Fatalf("capacity should not be called: %+v", capacity)
 	}
 }
@@ -112,9 +112,6 @@ func TestKubernetesRuntimeReusesExistingComputePoolID(t *testing.T) {
 	}
 	if result.NodePoolID != "np-existing" {
 		t.Fatalf("NodePoolID = %q, want np-existing", result.NodePoolID)
-	}
-	if capacity.createdComputeAllocationID != "" {
-		t.Fatalf("existing nodepool should be reused without ensure: %+v", capacity)
 	}
 	if capacity.verifiedNodePoolID != "np-existing" {
 		t.Fatalf("verified nodepool = %q, want np-existing", capacity.verifiedNodePoolID)
@@ -139,19 +136,10 @@ func TestKubernetesRuntimeDoesNotDeleteComputePoolWhenDestroyingCompute(t *testi
 }
 
 type recordingCapacity struct {
-	nodePoolID                 string
-	err                        error
-	createdComputeAllocationID string
-	verifiedNodePoolID         string
-	deletedNodePoolID          string
-}
-
-func (c *recordingCapacity) EnsureNodePool(_ context.Context, req CapacityNodePoolRequest) (CapacityNodePoolResult, error) {
-	if c.err != nil {
-		return CapacityNodePoolResult{}, c.err
-	}
-	c.createdComputeAllocationID = req.ComputeAllocationID
-	return CapacityNodePoolResult{NodePoolID: c.nodePoolID}, nil
+	nodePoolID         string
+	err                error
+	verifiedNodePoolID string
+	deletedNodePoolID  string
 }
 
 func (c *recordingCapacity) VerifyNodePool(_ context.Context, nodePoolID string) (bool, error) {

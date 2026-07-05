@@ -8,6 +8,7 @@ import (
 )
 
 var ErrUnsupportedOperationKind = errors.New("unsupported_operation_kind")
+var ErrComputePoolNotResolved = errors.New("compute_pool_not_resolved")
 
 type Store interface {
 	GetOperation(context.Context, string) (postgres.OperationRow, error)
@@ -34,6 +35,25 @@ type Runtime interface {
 	DetachStorage(context.Context, postgres.StorageAttachmentRow) error
 }
 
+type ComputePoolResolver interface {
+	ResolveComputePool(context.Context, ComputePoolRequest) (ComputePoolResult, error)
+}
+
+type ComputePoolRequest struct {
+	ComputeAllocationID  string
+	WorkspaceID          string
+	OwnerAccountID       string
+	ProductPresetID      string
+	ComputeShapeJSON     string
+	ProviderInstanceType string
+	CapacityPoolID       string
+	IsolationMode        string
+}
+
+type ComputePoolResult struct {
+	NodePoolID string
+}
+
 type RuntimeStorageResult struct {
 	ProviderRef string
 }
@@ -56,8 +76,9 @@ type Receipt struct {
 }
 
 type Orchestrator struct {
-	Store   Store
-	Runtime Runtime
+	Store        Store
+	Runtime      Runtime
+	ComputePools ComputePoolResolver
 }
 
 func (o Orchestrator) Apply(ctx context.Context, operationID string) (Receipt, error) {
@@ -120,13 +141,18 @@ func (o Orchestrator) applyComputeAllocation(ctx context.Context, id string) err
 	if err != nil {
 		return err
 	}
+	if err := o.resolveComputePool(ctx, &row, ""); err != nil {
+		return err
+	}
 	result, err := o.Runtime.CreateCompute(ctx, row)
 	if err != nil {
 		return err
 	}
 	row.ProviderRef = result.ProviderRef
 	row.RuntimeRef = result.RuntimeRef
-	row.NodePoolID = result.NodePoolID
+	if result.NodePoolID != "" {
+		row.NodePoolID = result.NodePoolID
+	}
 	row.State = "running"
 	return o.Store.UpdateComputeAllocation(ctx, row)
 }
@@ -169,10 +195,17 @@ func (o Orchestrator) applyWorkspace(ctx context.Context, id string) error {
 	if err := o.applyStorageVolume(ctx, workspace.StorageID); err != nil {
 		return err
 	}
+	compute, err := o.Store.GetComputeAllocation(ctx, workspace.ComputeAllocationID)
+	if err != nil {
+		return err
+	}
+	if err := o.resolveComputePool(ctx, &compute, workspace.ID); err != nil {
+		return err
+	}
 	if err := o.applyComputeAllocation(ctx, workspace.ComputeAllocationID); err != nil {
 		return err
 	}
-	compute, err := o.Store.GetComputeAllocation(ctx, workspace.ComputeAllocationID)
+	compute, err = o.Store.GetComputeAllocation(ctx, workspace.ComputeAllocationID)
 	if err != nil {
 		return err
 	}
@@ -204,6 +237,34 @@ func (o Orchestrator) applyWorkspace(ctx context.Context, id string) error {
 	}
 	workspace.State = "running"
 	return o.Store.UpdateWorkspace(ctx, workspace)
+}
+
+func (o Orchestrator) resolveComputePool(ctx context.Context, row *postgres.ComputeAllocationRow, workspaceID string) error {
+	if o.ComputePools == nil || !requiresComputePool(*row) || row.NodePoolID != "" {
+		return nil
+	}
+	result, err := o.ComputePools.ResolveComputePool(ctx, ComputePoolRequest{
+		ComputeAllocationID:  row.ID,
+		WorkspaceID:          workspaceID,
+		OwnerAccountID:       row.OwnerAccountID,
+		ProductPresetID:      row.ProductPresetID,
+		ComputeShapeJSON:     row.ComputeShapeJSON,
+		ProviderInstanceType: row.ProviderInstanceType,
+		CapacityPoolID:       row.CapacityPoolID,
+		IsolationMode:        row.IsolationMode,
+	})
+	if err != nil {
+		return err
+	}
+	if result.NodePoolID == "" {
+		return ErrComputePoolNotResolved
+	}
+	row.NodePoolID = result.NodePoolID
+	return o.Store.UpdateComputeAllocation(ctx, *row)
+}
+
+func requiresComputePool(row postgres.ComputeAllocationRow) bool {
+	return row.IsolationMode == "workspace_exclusive_cvm" || row.CapacityPoolID == "tencent-cpu-compute-pool" || row.CapacityPoolID == "tencent-gpu-compute-pool"
 }
 
 func (o Orchestrator) applyComputeAllocationDestroy(ctx context.Context, id string) error {
