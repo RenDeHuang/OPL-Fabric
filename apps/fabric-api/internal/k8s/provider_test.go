@@ -204,8 +204,14 @@ func TestCreateComputeCarriesCapacityBoundaryMetadata(t *testing.T) {
 			t.Fatalf("annotation %s = %q, want %q", key, deploy.Annotations[key], want)
 		}
 	}
-	if deploy.Spec.Template.Spec.NodeSelector["oplfabric.cn/compute-id"] != "compute-capacity" {
-		t.Fatalf("node selector = %+v, want compute label binding", deploy.Spec.Template.Spec.NodeSelector)
+	for key, want := range map[string]string{
+		"oplfabric.cn/capacity-model":   "compute-pool",
+		"oplfabric.cn/capacity-pool-id": "tencent-cpu-compute-pool",
+		"oplfabric.cn/instance-type":    "SA5.LARGE8",
+	} {
+		if deploy.Spec.Template.Spec.NodeSelector[key] != want {
+			t.Fatalf("node selector %s = %q, want %q; selector=%+v", key, deploy.Spec.Template.Spec.NodeSelector[key], want, deploy.Spec.Template.Spec.NodeSelector)
+		}
 	}
 
 	env := map[string]string{}

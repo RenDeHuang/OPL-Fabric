@@ -471,13 +471,17 @@ func (p Provider) imagePullSecrets() []corev1.LocalObjectReference {
 }
 
 func computeNodeSelector(input CreateComputeInput) map[string]string {
-	if input.NodePoolID == "" || input.ID == "" {
+	if input.NodePoolID == "" || input.CapacityPoolID == "" || input.ProviderInstanceType == "" {
 		return nil
 	}
 	if input.IsolationMode != "workspace_exclusive_cvm" {
 		return nil
 	}
-	return map[string]string{"oplfabric.cn/compute-id": input.ID}
+	return map[string]string{
+		"oplfabric.cn/capacity-model":   "compute-pool",
+		"oplfabric.cn/capacity-pool-id": input.CapacityPoolID,
+		"oplfabric.cn/instance-type":    input.ProviderInstanceType,
+	}
 }
 
 func (p Provider) workspaceWebUIPort() int32 {
