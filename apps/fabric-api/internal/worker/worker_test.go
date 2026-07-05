@@ -50,7 +50,7 @@ func TestRunOnceSkipsOperationWhenLeaseIsNotAcquired(t *testing.T) {
 func TestRunOnceRecordsFailureWhenApplyFails(t *testing.T) {
 	applyErr := errors.New("apply_failed")
 	store := &fakeStore{
-		operations: []postgres.OperationRow{{ID: "op-1", ResourceKind: "compute_resource", ResourceID: "compute-1", State: "accepted"}},
+		operations: []postgres.OperationRow{{ID: "op-1", ResourceKind: "compute_allocation", ResourceID: "compute-1", State: "accepted"}},
 		leases:     map[string]bool{"op-1": true},
 	}
 	orch := &fakeOrchestrator{err: applyErr}
@@ -69,7 +69,7 @@ func TestRunOnceProcessesMultipleAcceptedResourceOperations(t *testing.T) {
 	store := &fakeStore{
 		operations: []postgres.OperationRow{
 			{ID: "op-storage", ResourceKind: "storage_volume", ResourceID: "storage-1", State: "accepted"},
-			{ID: "op-compute", ResourceKind: "compute_resource", ResourceID: "compute-1", State: "accepted"},
+			{ID: "op-compute", ResourceKind: "compute_allocation", ResourceID: "compute-1", State: "accepted"},
 		},
 		leases: map[string]bool{"op-storage": true, "op-compute": true},
 	}

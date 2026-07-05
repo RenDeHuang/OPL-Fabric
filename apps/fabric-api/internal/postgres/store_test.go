@@ -9,7 +9,7 @@ import (
 
 func TestSchemaContainsRequiredTables(t *testing.T) {
 	required := []string{
-		"compute_resources",
+		"compute_allocations",
 		"storage_volumes",
 		"storage_attachments",
 		"workspace_entries",
@@ -29,7 +29,7 @@ func TestSchemaContainsRequiredTables(t *testing.T) {
 
 func TestSchemaContainsPersistenceConstraints(t *testing.T) {
 	required := []string{
-		"compute_id TEXT NOT NULL REFERENCES compute_resources(id)",
+		"compute_allocation_id TEXT NOT NULL REFERENCES compute_allocations(id)",
 		"storage_id TEXT NOT NULL REFERENCES storage_volumes(id)",
 		"attachment_id TEXT NOT NULL REFERENCES storage_attachments(id)",
 		"owner_account_id TEXT NOT NULL",
@@ -46,7 +46,7 @@ func TestSchemaContainsPersistenceConstraints(t *testing.T) {
 		"provider_refs JSONB NOT NULL DEFAULT '{}'::jsonb",
 		"evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb",
 		"storage_id TEXT NOT NULL REFERENCES storage_volumes(id)",
-		"compute_id TEXT NOT NULL REFERENCES compute_resources(id)",
+		"compute_allocation_id TEXT NOT NULL REFERENCES compute_allocations(id)",
 		"entry_id TEXT NOT NULL REFERENCES workspace_entries(id)",
 		"CHECK (size_gb > 0)",
 		"CHECK (sha256 ~ '^[A-Fa-f0-9]{64}$')",
@@ -91,8 +91,8 @@ func TestNilStoreResourceMethodsReturnError(t *testing.T) {
 	if err := store.CreateStorageVolume(ctx, StorageVolumeRow{}); err != ErrStoreNotOpen {
 		t.Fatalf("CreateStorageVolume error = %v, want %v", err, ErrStoreNotOpen)
 	}
-	if err := store.CreateComputeResource(ctx, ComputeResourceRow{}); err != ErrStoreNotOpen {
-		t.Fatalf("CreateComputeResource error = %v, want %v", err, ErrStoreNotOpen)
+	if err := store.CreateComputeAllocation(ctx, ComputeAllocationRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("CreateComputeAllocation error = %v, want %v", err, ErrStoreNotOpen)
 	}
 	if err := store.CreateStorageAttachment(ctx, StorageAttachmentRow{}); err != ErrStoreNotOpen {
 		t.Fatalf("CreateStorageAttachment error = %v, want %v", err, ErrStoreNotOpen)
@@ -109,11 +109,11 @@ func TestNilStoreResourceMethodsReturnError(t *testing.T) {
 	if err := store.UpdateStorageVolume(ctx, StorageVolumeRow{}); err != ErrStoreNotOpen {
 		t.Fatalf("UpdateStorageVolume error = %v, want %v", err, ErrStoreNotOpen)
 	}
-	if _, err := store.GetComputeResource(ctx, "compute-1"); err != ErrStoreNotOpen {
-		t.Fatalf("GetComputeResource error = %v, want %v", err, ErrStoreNotOpen)
+	if _, err := store.GetComputeAllocation(ctx, "compute-1"); err != ErrStoreNotOpen {
+		t.Fatalf("GetComputeAllocation error = %v, want %v", err, ErrStoreNotOpen)
 	}
-	if err := store.UpdateComputeResource(ctx, ComputeResourceRow{}); err != ErrStoreNotOpen {
-		t.Fatalf("UpdateComputeResource error = %v, want %v", err, ErrStoreNotOpen)
+	if err := store.UpdateComputeAllocation(ctx, ComputeAllocationRow{}); err != ErrStoreNotOpen {
+		t.Fatalf("UpdateComputeAllocation error = %v, want %v", err, ErrStoreNotOpen)
 	}
 	if _, err := store.GetStorageAttachment(ctx, "attach-1"); err != ErrStoreNotOpen {
 		t.Fatalf("GetStorageAttachment error = %v, want %v", err, ErrStoreNotOpen)

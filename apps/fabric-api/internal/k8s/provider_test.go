@@ -179,8 +179,8 @@ func TestCreateComputeCarriesCapacityBoundaryMetadata(t *testing.T) {
 		ProductPresetID:      "custom",
 		ComputeShapeJSON:     `{"cpu":4,"memoryGb":8}`,
 		ProviderInstanceType: "SA5.LARGE8",
-		CapacityPoolID:       "dedicated-nodepool-template",
-		IsolationMode:        "dedicated_nodepool",
+		CapacityPoolID:       "tencent-cpu-compute-pool",
+		IsolationMode:        "workspace_exclusive_cvm",
 		NodePoolID:           "np-example",
 		RuntimeRef:           "deployment/compute-capacity",
 	})
@@ -194,8 +194,8 @@ func TestCreateComputeCarriesCapacityBoundaryMetadata(t *testing.T) {
 		t.Fatalf("deployment missing: %v", err)
 	}
 	for key, want := range map[string]string{
-		"oplcloud.cn/capacity-pool-id":       "dedicated-nodepool-template",
-		"oplcloud.cn/isolation-mode":         "dedicated_nodepool",
+		"oplcloud.cn/capacity-pool-id":       "tencent-cpu-compute-pool",
+		"oplcloud.cn/isolation-mode":         "workspace_exclusive_cvm",
 		"oplcloud.cn/node-pool-id":           "np-example",
 		"oplcloud.cn/runtime-ref":            "deployment/compute-capacity",
 		"oplcloud.cn/provider-instance-type": "SA5.LARGE8",
@@ -215,8 +215,8 @@ func TestCreateComputeCarriesCapacityBoundaryMetadata(t *testing.T) {
 	for key, want := range map[string]string{
 		"OPL_PRODUCT_PRESET_ID":  "custom",
 		"OPL_COMPUTE_SHAPE_JSON": `{"cpu":4,"memoryGb":8}`,
-		"OPL_CAPACITY_POOL_ID":   "dedicated-nodepool-template",
-		"OPL_ISOLATION_MODE":     "dedicated_nodepool",
+		"OPL_CAPACITY_POOL_ID":   "tencent-cpu-compute-pool",
+		"OPL_ISOLATION_MODE":     "workspace_exclusive_cvm",
 	} {
 		if env[key] != want {
 			t.Fatalf("env %s = %q, want %q", key, env[key], want)

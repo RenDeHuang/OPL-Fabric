@@ -119,8 +119,8 @@
         "properties": {
           "id": { "type": "string", "minLength": 1 },
           "provider": { "type": "string", "minLength": 1 },
-          "kind": { "type": "string", "enum": ["shared", "dedicated_template", "dedicated"] },
-          "isolationMode": { "type": "string", "enum": ["shared_pool", "dedicated_nodepool"] },
+          "kind": { "type": "string", "enum": ["nodepool_by_instance_type"] },
+          "isolationMode": { "type": "string", "enum": ["workspace_exclusive_cvm"] },
           "region": { "type": "string", "minLength": 1 },
           "zone": { "type": "string" },
           "providerRef": { "type": "string" },
@@ -134,8 +134,8 @@
         "required": ["id", "mode", "capacityPoolKind", "createPoolIfMissing", "rejectIfNoCapacity", "description"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
-          "mode": { "type": "string", "enum": ["shared_pool", "dedicated_nodepool"] },
-          "capacityPoolKind": { "type": "string", "enum": ["shared", "dedicated_template", "dedicated"] },
+          "mode": { "type": "string", "enum": ["workspace_exclusive_cvm"] },
+          "capacityPoolKind": { "type": "string", "enum": ["nodepool_by_instance_type"] },
           "createPoolIfMissing": { "type": "boolean" },
           "rejectIfNoCapacity": { "type": "boolean" },
           "description": { "type": "string", "minLength": 1 }
@@ -194,7 +194,7 @@
           "retained": { "type": "boolean" }
         }
       },
-      "ComputeResource": {
+      "ComputeAllocation": {
         "type": "object",
         "required": ["id", "state", "providerRef", "runtimeRef"],
         "properties": {
@@ -206,10 +206,10 @@
       },
       "StorageAttachment": {
         "type": "object",
-        "required": ["id", "computeId", "storageId", "state", "mountPath", "providerRef"],
+        "required": ["id", "computeAllocationId", "storageId", "state", "mountPath", "providerRef"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
-          "computeId": { "type": "string", "minLength": 1 },
+          "computeAllocationId": { "type": "string", "minLength": 1 },
           "storageId": { "type": "string", "minLength": 1 },
           "state": { "type": "string", "minLength": 1 },
           "mountPath": { "type": "string", "minLength": 1 },
@@ -238,7 +238,7 @@
           "sizeGb": { "type": "integer", "minimum": 1 }
         }
       },
-      "CreateComputeResourceRequest": {
+      "CreateComputeAllocationRequest": {
         "type": "object",
         "required": ["accountId", "requestedBy"],
         "properties": {
@@ -248,16 +248,16 @@
           "computeShape": { "type": "object", "additionalProperties": true },
           "providerInstanceType": { "type": "string" },
           "capacityPoolId": { "type": "string" },
-          "isolationMode": { "type": "string", "enum": ["", "shared_pool", "dedicated_nodepool"] }
+          "isolationMode": { "type": "string", "enum": ["", "workspace_exclusive_cvm"] }
         }
       },
       "CreateStorageAttachmentRequest": {
         "type": "object",
-        "required": ["accountId", "requestedBy", "computeId", "storageId"],
+        "required": ["accountId", "requestedBy", "computeAllocationId", "storageId"],
         "properties": {
           "accountId": { "type": "string", "minLength": 1 },
           "requestedBy": { "type": "string", "minLength": 1 },
-          "computeId": { "type": "string", "minLength": 1 },
+          "computeAllocationId": { "type": "string", "minLength": 1 },
           "storageId": { "type": "string", "minLength": 1 },
           "mountPath": { "type": "string" }
         }
@@ -283,7 +283,7 @@
           "computeShape": { "type": "object", "additionalProperties": true },
           "providerInstanceType": { "type": "string" },
           "capacityPoolId": { "type": "string" },
-          "isolationMode": { "type": "string", "enum": ["", "shared_pool", "dedicated_nodepool"] },
+          "isolationMode": { "type": "string", "enum": ["", "workspace_exclusive_cvm"] },
           "storage": {
             "type": "object",
             "additionalProperties": false,
@@ -295,7 +295,7 @@
       },
       "Workspace": {
         "type": "object",
-        "required": ["workspaceId", "state", "storage", "compute", "attachment", "entry", "operationId"],
+        "required": ["workspaceId", "state", "storage", "computeAllocation", "attachment", "entry", "operationId"],
         "properties": {
           "workspaceId": { "type": "string", "minLength": 1 },
           "state": { "type": "string", "enum": ["provisioning", "running", "blocked", "failed", "destroyed"] },
@@ -309,7 +309,7 @@
               "sizeGb": { "type": "integer", "minimum": 1 }
             }
           },
-          "compute": {
+          "computeAllocation": {
             "type": "object",
             "required": ["id", "state"],
             "properties": {
@@ -416,15 +416,15 @@
         }
       }
     },
-    "/api/fabric/compute-resources": {
+    "/api/fabric/compute-allocations": {
       "post": {
-        "operationId": "createFabricComputeResource",
-        "summary": "Accept compute resource creation",
+        "operationId": "createFabricComputeAllocation",
+        "summary": "Accept compute allocation creation",
         "parameters": [
           { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } },
           { "name": "X-Correlation-Id", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
         ],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateComputeResourceRequest" } } } },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateComputeAllocationRequest" } } } },
         "responses": {
           "202": { "description": "Accepted operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OperationReceipt" } } } },
           "400": { "description": "Bad request" },
@@ -433,15 +433,15 @@
         }
       }
     },
-    "/api/fabric/compute-resources/{id}": {
+    "/api/fabric/compute-allocations/{id}": {
       "get": {
-        "operationId": "getFabricComputeResource",
-        "summary": "Get Fabric compute resource",
+        "operationId": "getFabricComputeAllocation",
+        "summary": "Get Fabric compute allocation",
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } }
         ],
         "responses": {
-          "200": { "description": "Fabric compute resource", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ComputeResource" } } } },
+          "200": { "description": "Fabric compute allocation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ComputeAllocation" } } } },
           "400": { "description": "Bad request" },
           "401": { "description": "Unauthorized" },
           "503": { "description": "Store unavailable" }
@@ -544,9 +544,9 @@
         }
       }
     },
-    "/api/fabric/compute-resources/{id}/destroy": {
+    "/api/fabric/compute-allocations/{id}/destroy": {
       "post": {
-        "operationId": "destroyFabricComputeResource",
+        "operationId": "destroyFabricComputeAllocation",
         "summary": "Accept compute destruction",
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },

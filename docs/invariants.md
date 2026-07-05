@@ -2,6 +2,8 @@
 
 - Fabric owns only Fabric resource truth and provider execution evidence.
 - Storage is persistent user-owned state; compute is rebuildable execution capacity.
+- A ComputePool is shared by package or provider instance type.
+- A ComputeAllocation is workspace-exclusive while active.
 - A Workspace entry requires an attached storage volume.
 - Compute destruction never destroys storage.
 - Storage can be reattached after compute destruction.

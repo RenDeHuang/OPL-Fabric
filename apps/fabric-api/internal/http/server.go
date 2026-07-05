@@ -35,11 +35,11 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 		}
 		writeJSON(w, resource)
 	})
-	mux.HandleFunc("POST /api/fabric/compute-resources", func(w http.ResponseWriter, r *http.Request) {
-		handleMutation(w, r, svc.AcceptComputeResource)
+	mux.HandleFunc("POST /api/fabric/compute-allocations", func(w http.ResponseWriter, r *http.Request) {
+		handleMutation(w, r, svc.AcceptComputeAllocation)
 	})
-	mux.HandleFunc("GET /api/fabric/compute-resources/{id}", func(w http.ResponseWriter, r *http.Request) {
-		resource, err := svc.ComputeResource(r.Context(), r.PathValue("id"))
+	mux.HandleFunc("GET /api/fabric/compute-allocations/{id}", func(w http.ResponseWriter, r *http.Request) {
+		resource, err := svc.ComputeAllocation(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -79,9 +79,9 @@ func NewServer(svc *service.Service, cfg Config) http.Handler {
 		}
 		writeJSON(w, workspace)
 	})
-	mux.HandleFunc("POST /api/fabric/compute-resources/{id}/destroy", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/fabric/compute-allocations/{id}/destroy", func(w http.ResponseWriter, r *http.Request) {
 		handleConfirmedMutation(w, r, func(headers service.MutationHeaders, req service.ConfirmRequest) (service.OperationReceipt, error) {
-			return svc.AcceptComputeDestroy(r.Context(), headers, r.PathValue("id"), req)
+			return svc.AcceptComputeAllocationDestroy(r.Context(), headers, r.PathValue("id"), req)
 		})
 	})
 	mux.HandleFunc("POST /api/fabric/storage-volumes/{id}/destroy", func(w http.ResponseWriter, r *http.Request) {

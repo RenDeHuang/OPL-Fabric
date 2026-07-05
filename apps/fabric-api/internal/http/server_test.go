@@ -149,7 +149,7 @@ func TestCreateWorkspaceEndpointReturnsAcceptedOperation(t *testing.T) {
 	svc := service.New(cfg)
 	server := NewServer(svc, Config{OperatorToken: "test-token"})
 
-	body := `{"accountId":"acct-1","requestedBy":"user-1","workspaceName":"Lab","productPresetId":"basic","computeShape":{"cpu":2,"memoryGb":4},"storage":{"sizeGb":20},"isolationMode":"shared_pool"}`
+	body := `{"accountId":"acct-1","requestedBy":"user-1","workspaceName":"Lab","productPresetId":"basic","computeShape":{"cpu":2,"memoryGb":4},"storage":{"sizeGb":20},"isolationMode":"workspace_exclusive_cvm"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/fabric/workspaces", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("Idempotency-Key", "idem-workspace-delivery-1")
@@ -173,8 +173,8 @@ func TestCreateWorkspaceEndpointReturnsAcceptedOperation(t *testing.T) {
 	if receipt.OperationID == "" || receipt.State != "accepted" || receipt.ResourceKind != "workspace" || receipt.ResourceID == "" {
 		t.Fatalf("receipt mismatch: %+v", receipt)
 	}
-	if len(store.workspaces) != 1 || len(store.storageVolumes) != 1 || len(store.computeResources) != 1 || len(store.storageAttachments) != 1 || len(store.workspaceEntries) != 1 {
-		t.Fatalf("aggregate rows missing: workspaces=%d storage=%d compute=%d attachments=%d entries=%d", len(store.workspaces), len(store.storageVolumes), len(store.computeResources), len(store.storageAttachments), len(store.workspaceEntries))
+	if len(store.workspaces) != 1 || len(store.storageVolumes) != 1 || len(store.computeAllocations) != 1 || len(store.storageAttachments) != 1 || len(store.workspaceEntries) != 1 {
+		t.Fatalf("aggregate rows missing: workspaces=%d storage=%d compute=%d attachments=%d entries=%d", len(store.workspaces), len(store.storageVolumes), len(store.computeAllocations), len(store.storageAttachments), len(store.workspaceEntries))
 	}
 	if store.workspaceReservations != 1 {
 		t.Fatalf("workspace reservations = %d, want 1", store.workspaceReservations)
@@ -200,8 +200,8 @@ func TestCreateWorkspaceEndpointDoesNotLeaveRowsWhenReservationFails(t *testing.
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
-	if len(store.workspaces) != 0 || len(store.storageVolumes) != 0 || len(store.computeResources) != 0 || len(store.storageAttachments) != 0 || len(store.workspaceEntries) != 0 || len(store.operations) != 0 {
-		t.Fatalf("partial rows left behind: workspaces=%d storage=%d compute=%d attachments=%d entries=%d operations=%d", len(store.workspaces), len(store.storageVolumes), len(store.computeResources), len(store.storageAttachments), len(store.workspaceEntries), len(store.operations))
+	if len(store.workspaces) != 0 || len(store.storageVolumes) != 0 || len(store.computeAllocations) != 0 || len(store.storageAttachments) != 0 || len(store.workspaceEntries) != 0 || len(store.operations) != 0 {
+		t.Fatalf("partial rows left behind: workspaces=%d storage=%d compute=%d attachments=%d entries=%d operations=%d", len(store.workspaces), len(store.storageVolumes), len(store.computeAllocations), len(store.storageAttachments), len(store.workspaceEntries), len(store.operations))
 	}
 }
 
@@ -263,11 +263,11 @@ func TestResourceStatusEndpointsReturnDurableRows(t *testing.T) {
 		storageVolumes: map[string]postgres.StorageVolumeRow{
 			"storage-1": {ID: "storage-1", State: "available", SizeGB: 20, ProviderRef: "pvc/storage-1", Retained: true},
 		},
-		computeResources: map[string]postgres.ComputeResourceRow{
+		computeAllocations: map[string]postgres.ComputeAllocationRow{
 			"compute-1": {ID: "compute-1", State: "running", ProviderRef: "deployment/compute-1", RuntimeRef: "service/compute-1"},
 		},
 		storageAttachments: map[string]postgres.StorageAttachmentRow{
-			"attach-1": {ID: "attach-1", ComputeID: "compute-1", StorageID: "storage-1", State: "attached", MountPath: "/data", ProviderRef: "deployment/compute-1:pvc/storage-1"},
+			"attach-1": {ID: "attach-1", ComputeAllocationID: "compute-1", StorageID: "storage-1", State: "attached", MountPath: "/data", ProviderRef: "deployment/compute-1:pvc/storage-1"},
 		},
 		workspaceEntries: map[string]postgres.WorkspaceEntryRow{
 			"entry-1": {ID: "entry-1", WorkspaceID: "ws-1", AttachmentID: "attach-1", State: "ready", Host: "workspace.medopl.cn", Path: "/w/ws-1/", ServiceRef: "service/compute-1"},
@@ -281,7 +281,7 @@ func TestResourceStatusEndpointsReturnDurableRows(t *testing.T) {
 		want string
 	}{
 		{"/api/fabric/storage-volumes/storage-1", `"sizeGb":20`},
-		{"/api/fabric/compute-resources/compute-1", `"runtimeRef":"service/compute-1"`},
+		{"/api/fabric/compute-allocations/compute-1", `"runtimeRef":"service/compute-1"`},
 		{"/api/fabric/storage-attachments/attach-1", `"mountPath":"/data"`},
 		{"/api/fabric/workspace-entries/entry-1", `"serviceRef":"service/compute-1"`},
 	}
@@ -498,7 +498,7 @@ func testServiceConfig() service.Config {
 type recordingStore struct {
 	operations            map[string]postgres.OperationRow
 	storageVolumes        map[string]postgres.StorageVolumeRow
-	computeResources      map[string]postgres.ComputeResourceRow
+	computeAllocations    map[string]postgres.ComputeAllocationRow
 	storageAttachments    map[string]postgres.StorageAttachmentRow
 	workspaceEntries      map[string]postgres.WorkspaceEntryRow
 	workspaces            map[string]postgres.WorkspaceRow
@@ -529,11 +529,11 @@ func (s *recordingStore) CreateStorageVolume(_ context.Context, row postgres.Sto
 	return nil
 }
 
-func (s *recordingStore) CreateComputeResource(_ context.Context, row postgres.ComputeResourceRow) error {
-	if s.computeResources == nil {
-		s.computeResources = map[string]postgres.ComputeResourceRow{}
+func (s *recordingStore) CreateComputeAllocation(_ context.Context, row postgres.ComputeAllocationRow) error {
+	if s.computeAllocations == nil {
+		s.computeAllocations = map[string]postgres.ComputeAllocationRow{}
 	}
-	s.computeResources[row.ID] = row
+	s.computeAllocations[row.ID] = row
 	return nil
 }
 
@@ -572,7 +572,7 @@ func (s *recordingStore) CreateWorkspaceReservation(ctx context.Context, reserva
 	if err := s.CreateStorageVolume(ctx, reservation.Storage); err != nil {
 		return err
 	}
-	if err := s.CreateComputeResource(ctx, reservation.Compute); err != nil {
+	if err := s.CreateComputeAllocation(ctx, reservation.Compute); err != nil {
 		return err
 	}
 	if err := s.CreateStorageAttachment(ctx, reservation.Attachment); err != nil {
@@ -598,11 +598,11 @@ func (s *recordingStore) GetStorageVolume(_ context.Context, id string) (postgre
 	return postgres.StorageVolumeRow{}, postgres.ErrStoreNotOpen
 }
 
-func (s *recordingStore) GetComputeResource(_ context.Context, id string) (postgres.ComputeResourceRow, error) {
-	if row, ok := s.computeResources[id]; ok {
+func (s *recordingStore) GetComputeAllocation(_ context.Context, id string) (postgres.ComputeAllocationRow, error) {
+	if row, ok := s.computeAllocations[id]; ok {
 		return row, nil
 	}
-	return postgres.ComputeResourceRow{}, postgres.ErrStoreNotOpen
+	return postgres.ComputeAllocationRow{}, postgres.ErrStoreNotOpen
 }
 
 func (s *recordingStore) GetStorageAttachment(_ context.Context, id string) (postgres.StorageAttachmentRow, error) {

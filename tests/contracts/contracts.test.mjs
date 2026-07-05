@@ -11,7 +11,7 @@ const contractFiles = [
   "contracts/fabric-resource-catalog.schema.json",
   "contracts/fabric-runtime-supervision.schema.json",
   "contracts/fabric-storage-volume.schema.json",
-  "contracts/fabric-compute-resource.schema.json",
+  "contracts/fabric-compute-allocation.schema.json",
   "contracts/fabric-storage-attachment.schema.json",
   "contracts/fabric-workspace-entry.schema.json",
   "contracts/fabric-workspace.schema.json"
@@ -67,9 +67,9 @@ test("OpenAPI only publishes currently implemented HTTP routes", () => {
   const openapi = JSON.parse(readFileSync("contracts/fabric-api.openapi.json", "utf8"));
   assert.deepEqual(Object.keys(openapi.paths).sort(), [
     "/api/fabric/catalog",
-    "/api/fabric/compute-resources",
-    "/api/fabric/compute-resources/{id}",
-    "/api/fabric/compute-resources/{id}/destroy",
+    "/api/fabric/compute-allocations",
+    "/api/fabric/compute-allocations/{id}",
+    "/api/fabric/compute-allocations/{id}/destroy",
     "/api/fabric/operations/{id}",
     "/api/fabric/readiness",
     "/api/fabric/storage-attachments",
@@ -124,7 +124,7 @@ test("staging live e2e workspace image matches configured TCR namespace", () => 
   assert.equal(workspaceImage, `uswccr.ccs.tencentyun.com/${tcrNamespace}/one-person-lab-app:latest`);
 });
 
-test("staging live e2e prewarms dedicated nodepools and allows TKE cold start", () => {
+test("staging live e2e prewarms compute pools and allows TKE cold start", () => {
   const workflow = readFileSync(".github/workflows/fabric-staging-live-e2e.yml", "utf8");
   const desiredPodNumber = workflow.match(/^\s+OPL_TKE_NODEPOOL_DESIRED_POD_NUMBER:\s+"?([^"\n]+)"?/m)?.[1];
   const e2eTimeout = workflow.match(/^\s+OPL_LIVE_E2E_TIMEOUT:\s+(\S+)/m)?.[1];

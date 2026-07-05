@@ -20,7 +20,7 @@ func TestDefaultCatalogUsesPresetsAndCustomShapeProfiles(t *testing.T) {
 	if basic.ID != "basic" || !basic.Available || basic.DefaultCPU != 2 || basic.DefaultMemoryGB != 4 || basic.DefaultDiskGB != 10 {
 		t.Fatalf("basic preset mismatch: %+v", basic)
 	}
-	if basic.ComputeProfileID != "cpu-general" || basic.SchedulingPolicyID != "shared-pool-first" {
+	if basic.ComputeProfileID != "cpu-general" || basic.SchedulingPolicyID != "workspace-exclusive-cvm" {
 		t.Fatalf("basic preset should reference general CPU policy: %+v", basic)
 	}
 
@@ -44,7 +44,10 @@ func TestDefaultCatalogUsesPresetsAndCustomShapeProfiles(t *testing.T) {
 	if len(catalog.CapacityPools) == 0 {
 		t.Fatal("capacity pools are required")
 	}
-	if len(catalog.SchedulingPolicies) != 2 {
-		t.Fatalf("scheduling policy count = %d, want 2", len(catalog.SchedulingPolicies))
+	if len(catalog.SchedulingPolicies) != 1 {
+		t.Fatalf("scheduling policy count = %d, want 1", len(catalog.SchedulingPolicies))
+	}
+	if catalog.SchedulingPolicies[0].Mode != "workspace_exclusive_cvm" {
+		t.Fatalf("scheduling policy mode = %q, want workspace_exclusive_cvm", catalog.SchedulingPolicies[0].Mode)
 	}
 }

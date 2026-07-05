@@ -30,7 +30,7 @@ Not supported in the first implementation:
 
 Remaining risks:
 
-- The OPL Cloud comparison is pinned to `RenDeHuang/OPL-Cloud@126e6bf8b27ef18c2d18df8d846455015e0b3ee0`; newer OPL Cloud commits need a deliberate re-baseline and contract diff.
+- The OPL Cloud comparison is now pinned to `RenDeHuang/OPL-Cloud@2d2add6fd2d29a32ceaecab42fe9976865eafd3a`. The active product narrative is ComputePool by specification, workspace-exclusive ComputeAllocation, retained StorageVolume, stable Workspace URL, and one-person-lab-app runtime mounted to storage.
 - Readiness is still mainly configuration and environment readiness. Live PostgreSQL version checks and live Kubernetes API, storage, ingress, Tencent TKE capacity, node pool template, quota, and cluster capability checks are not complete.
 - Mutating APIs now accept resource reservations and return operation receipts, including `POST /api/fabric/workspaces`. The workspace route is the product mainline; it reserves storage, compute, attachment, entry, workspace, and operation rows transactionally.
 - `GET /api/fabric/workspaces/{id}` returns the reserved storage, compute, attachment, entry, and operation aggregate for Console polling. `GET` routes for each single resource expose the decomposed state for Console advanced views, operations, and recovery.
@@ -38,12 +38,12 @@ Remaining risks:
 - PostgreSQL coverage includes store method compilation and startup migration wiring, but not a live database migration and constraint test lane.
 - Production console hosting still needs explicit Fabric integration from OPL Cloud/Console. OPL Cloud now carries workspace gateway/proxy behavior in its Console server, while Fabric remains the storage/compute/attachment/entry API boundary.
 - The Kubernetes runtime provider now covers Deployment, Service, workspace Codex Secret, PVC, attachment mount, workspace ingress entry, detach, compute destroy, and PVC destroy with fake-client tests. Reconcile, status, watch behavior, and real-cluster validation remain future work.
-- The Tencent capacity provider now creates, verifies, and deletes TKE NodePools through the Tencent Cloud Go SDK when `OPL_TKE_ALLOW_NODEPOOL_MUTATION=true`. It is still gated by default and has not been exercised against the live staging cluster from this environment.
+- The Tencent capacity provider can create, verify, and delete TKE NodePools through the Tencent Cloud Go SDK when `OPL_TKE_ALLOW_NODEPOOL_MUTATION=true`. The workspace runtime path is now fail-closed until a workspace-exclusive compute request has a resolved ComputePool/NodePool ID; the next implementation step is replacing per-compute NodePool creation with ComputePool-by-instance-type plus workspace-exclusive CVM allocation.
 - The deployment manifest has minimal RBAC for the current provider only; future read, watch, patch, and update flows must expand it deliberately.
 - OPL Cloud catalog sections for environment templates, connectors, and agent packages are not yet implemented in OPL Fabric.
 - OPL Cloud deployment contract fields for ingress, image pull secrets, TLS, Tencent registry, Codex runtime config, TKE node pool launch config, autoscaling config, and production diagnostics are not fully represented by the current deployment skeleton.
 - No real-cluster validation has run in this environment; current Kubernetes checks are fake-client or YAML structural checks.
-- No rollout was performed for Phase 3-7. The default path is controlled dry-run. Live staging e2e remains blocked until live PostgreSQL, kubeconfig or in-cluster config, TKE, TCR, storage class, ingress class, Workspace image, worker enablement, and explicit live mutation flags are verified.
+- Live staging e2e has proven storage retention and compute rebuild behavior, but the capacity model still needs the ComputePool/ComputeAllocation refactor before it is production-shaped.
 - Central config records medopl-3 TKE and Codex workspace inputs plus the latest OPL Cloud Tencent node pool knobs. The Kubernetes provider covers the create/destroy primitives for the main chain with fake-client tests; reconcile, watch, status, and live readiness checks remain incomplete.
 - `OPL_CODEX_API_KEY` is optional until workspace Codex bootstrap is enabled for a published mutating compute API.
 - The latest OPL Cloud commit reverts its TKE NodePool goal work, so Fabric should continue with the Go client-go plus Tencent Cloud Go SDK split instead of importing OPL Cloud's current JavaScript provider/runtime approach.

@@ -416,7 +416,7 @@ func k8sName(id string) string {
 }
 
 func labelValue(id string) string {
-	return boundedName("compute", id, 63)
+	return boundedName("computealloc", id, 63)
 }
 
 func boundedName(prefix, id string, limit int) string {
@@ -474,7 +474,7 @@ func computeNodeSelector(input CreateComputeInput) map[string]string {
 	if input.NodePoolID == "" || input.ID == "" {
 		return nil
 	}
-	if input.IsolationMode != "dedicated_nodepool" && input.CapacityPoolID != "dedicated-nodepool-template" {
+	if input.IsolationMode != "workspace_exclusive_cvm" {
 		return nil
 	}
 	return map[string]string{"oplfabric.cn/compute-id": input.ID}

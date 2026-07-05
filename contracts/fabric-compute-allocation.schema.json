@@ -1,7 +1,7 @@
 {
-  "$id": "https://opl-fabric.local/contracts/fabric-compute-resource.schema.json",
+  "$id": "https://opl-fabric.local/contracts/fabric-compute-allocation.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Fabric Compute Resource",
+  "title": "Fabric Compute Allocation",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "state", "providerRef", "runtimeRef"],

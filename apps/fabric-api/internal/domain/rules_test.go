@@ -53,14 +53,14 @@ func TestDestroyStorageRequiresConfirmation(t *testing.T) {
 }
 
 func TestDestroyComputeDoesNotDestroyStorage(t *testing.T) {
-	compute := ComputeResource{ID: "compute-1", State: ComputeRunning}
+	compute := ComputeAllocation{ID: "compute-1", State: ComputeRunning}
 	storage := StorageVolume{ID: "storage-1", State: StorageAttached}
 
 	next, err := DestroyCompute(compute, storage)
 	if err != nil {
 		t.Fatalf("destroy compute failed: %v", err)
 	}
-	if next.Compute.State != ComputeDestroying {
+	if next.Compute.State != ComputeAllocationDestroying {
 		t.Fatalf("compute state = %s", next.Compute.State)
 	}
 	if next.Storage.State != StorageAttached {

@@ -25,7 +25,7 @@ func CanDestroyStorage(storage StorageVolume, req DestroyStorageRequest) error {
 	return nil
 }
 
-func DestroyCompute(compute ComputeResource, storage StorageVolume) (DestroyResult, error) {
-	compute.State = ComputeDestroying
+func DestroyCompute(compute ComputeAllocation, storage StorageVolume) (DestroyResult, error) {
+	compute.State = ComputeAllocationDestroying
 	return DestroyResult{Compute: compute, Storage: storage}, nil
 }

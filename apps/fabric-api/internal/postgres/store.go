@@ -55,7 +55,7 @@ type StorageVolumeRow struct {
 	Retained        bool
 }
 
-type ComputeResourceRow struct {
+type ComputeAllocationRow struct {
 	ID                   string
 	OwnerAccountID       string
 	ProductPresetID      string
@@ -70,13 +70,13 @@ type ComputeResourceRow struct {
 }
 
 type StorageAttachmentRow struct {
-	ID             string
-	OwnerAccountID string
-	ComputeID      string
-	StorageID      string
-	State          string
-	MountPath      string
-	ProviderRef    string
+	ID                  string
+	OwnerAccountID      string
+	ComputeAllocationID string
+	StorageID           string
+	State               string
+	MountPath           string
+	ProviderRef         string
 }
 
 type WorkspaceEntryRow struct {
@@ -91,22 +91,22 @@ type WorkspaceEntryRow struct {
 }
 
 type WorkspaceRow struct {
-	ID              string
-	OwnerAccountID  string
-	WorkspaceName   string
-	ProductPresetID string
-	StorageID       string
-	ComputeID       string
-	AttachmentID    string
-	EntryID         string
-	OperationID     string
-	State           string
+	ID                  string
+	OwnerAccountID      string
+	WorkspaceName       string
+	ProductPresetID     string
+	StorageID           string
+	ComputeAllocationID string
+	AttachmentID        string
+	EntryID             string
+	OperationID         string
+	State               string
 }
 
 type WorkspaceReservation struct {
 	Operation  OperationRow
 	Storage    StorageVolumeRow
-	Compute    ComputeResourceRow
+	Compute    ComputeAllocationRow
 	Attachment StorageAttachmentRow
 	Entry      WorkspaceEntryRow
 	Workspace  WorkspaceRow
@@ -286,37 +286,37 @@ WHERE id = $1
 	return err
 }
 
-func (s *Store) CreateComputeResource(ctx context.Context, row ComputeResourceRow) error {
+func (s *Store) CreateComputeAllocation(ctx context.Context, row ComputeAllocationRow) error {
 	if s == nil || s.pool == nil {
 		return ErrStoreNotOpen
 	}
 	_, err := s.pool.Exec(ctx, `
-INSERT INTO compute_resources (id, owner_account_id, product_preset_id, compute_shape_json, provider_instance_type, capacity_pool_id, isolation_mode, node_pool_id, runtime_ref, state, provider_ref)
+INSERT INTO compute_allocations (id, owner_account_id, product_preset_id, compute_shape_json, provider_instance_type, capacity_pool_id, isolation_mode, node_pool_id, runtime_ref, state, provider_ref)
 VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (id) DO NOTHING
 `, row.ID, row.OwnerAccountID, row.ProductPresetID, defaultJSON(row.ComputeShapeJSON), row.ProviderInstanceType, row.CapacityPoolID, row.IsolationMode, row.NodePoolID, row.RuntimeRef, row.State, row.ProviderRef)
 	return err
 }
 
-func (s *Store) GetComputeResource(ctx context.Context, id string) (ComputeResourceRow, error) {
+func (s *Store) GetComputeAllocation(ctx context.Context, id string) (ComputeAllocationRow, error) {
 	if s == nil || s.pool == nil {
-		return ComputeResourceRow{}, ErrStoreNotOpen
+		return ComputeAllocationRow{}, ErrStoreNotOpen
 	}
-	var row ComputeResourceRow
+	var row ComputeAllocationRow
 	err := s.pool.QueryRow(ctx, `
 SELECT id, owner_account_id, product_preset_id, compute_shape_json::text, provider_instance_type, capacity_pool_id, isolation_mode, node_pool_id, runtime_ref, state, provider_ref
-FROM compute_resources
+FROM compute_allocations
 WHERE id = $1
 `, id).Scan(&row.ID, &row.OwnerAccountID, &row.ProductPresetID, &row.ComputeShapeJSON, &row.ProviderInstanceType, &row.CapacityPoolID, &row.IsolationMode, &row.NodePoolID, &row.RuntimeRef, &row.State, &row.ProviderRef)
 	return row, err
 }
 
-func (s *Store) UpdateComputeResource(ctx context.Context, row ComputeResourceRow) error {
+func (s *Store) UpdateComputeAllocation(ctx context.Context, row ComputeAllocationRow) error {
 	if s == nil || s.pool == nil {
 		return ErrStoreNotOpen
 	}
 	_, err := s.pool.Exec(ctx, `
-UPDATE compute_resources
+UPDATE compute_allocations
 SET node_pool_id = $2, runtime_ref = $3, state = $4, provider_ref = $5, updated_at = now()
 WHERE id = $1
 `, row.ID, row.NodePoolID, row.RuntimeRef, row.State, row.ProviderRef)
@@ -328,10 +328,10 @@ func (s *Store) CreateStorageAttachment(ctx context.Context, row StorageAttachme
 		return ErrStoreNotOpen
 	}
 	_, err := s.pool.Exec(ctx, `
-INSERT INTO storage_attachments (id, owner_account_id, compute_id, storage_id, state, mount_path, provider_ref)
+INSERT INTO storage_attachments (id, owner_account_id, compute_allocation_id, storage_id, state, mount_path, provider_ref)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
-`, row.ID, row.OwnerAccountID, row.ComputeID, row.StorageID, row.State, row.MountPath, row.ProviderRef)
+`, row.ID, row.OwnerAccountID, row.ComputeAllocationID, row.StorageID, row.State, row.MountPath, row.ProviderRef)
 	return err
 }
 
@@ -341,10 +341,10 @@ func (s *Store) GetStorageAttachment(ctx context.Context, id string) (StorageAtt
 	}
 	var row StorageAttachmentRow
 	err := s.pool.QueryRow(ctx, `
-SELECT id, owner_account_id, compute_id, storage_id, state, mount_path, provider_ref
+SELECT id, owner_account_id, compute_allocation_id, storage_id, state, mount_path, provider_ref
 FROM storage_attachments
 WHERE id = $1
-`, id).Scan(&row.ID, &row.OwnerAccountID, &row.ComputeID, &row.StorageID, &row.State, &row.MountPath, &row.ProviderRef)
+`, id).Scan(&row.ID, &row.OwnerAccountID, &row.ComputeAllocationID, &row.StorageID, &row.State, &row.MountPath, &row.ProviderRef)
 	return row, err
 }
 
@@ -402,10 +402,10 @@ func (s *Store) CreateWorkspace(ctx context.Context, row WorkspaceRow) error {
 		return ErrStoreNotOpen
 	}
 	_, err := s.pool.Exec(ctx, `
-INSERT INTO workspaces (id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_id, attachment_id, entry_id, operation_id, state)
+INSERT INTO workspaces (id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_allocation_id, attachment_id, entry_id, operation_id, state)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (id) DO NOTHING
-`, row.ID, row.OwnerAccountID, row.WorkspaceName, row.ProductPresetID, row.StorageID, row.ComputeID, row.AttachmentID, row.EntryID, row.OperationID, row.State)
+`, row.ID, row.OwnerAccountID, row.WorkspaceName, row.ProductPresetID, row.StorageID, row.ComputeAllocationID, row.AttachmentID, row.EntryID, row.OperationID, row.State)
 	return err
 }
 
@@ -426,7 +426,7 @@ func (s *Store) CreateWorkspaceReservation(ctx context.Context, reservation Work
 	if err := insertStorageVolume(ctx, tx, reservation.Storage); err != nil {
 		return err
 	}
-	if err := insertComputeResource(ctx, tx, reservation.Compute); err != nil {
+	if err := insertComputeAllocation(ctx, tx, reservation.Compute); err != nil {
 		return err
 	}
 	if err := insertStorageAttachment(ctx, tx, reservation.Attachment); err != nil {
@@ -447,10 +447,10 @@ func (s *Store) GetWorkspace(ctx context.Context, id string) (WorkspaceRow, erro
 	}
 	var row WorkspaceRow
 	err := s.pool.QueryRow(ctx, `
-SELECT id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_id, attachment_id, entry_id, operation_id, state
+SELECT id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_allocation_id, attachment_id, entry_id, operation_id, state
 FROM workspaces
 WHERE id = $1
-`, id).Scan(&row.ID, &row.OwnerAccountID, &row.WorkspaceName, &row.ProductPresetID, &row.StorageID, &row.ComputeID, &row.AttachmentID, &row.EntryID, &row.OperationID, &row.State)
+`, id).Scan(&row.ID, &row.OwnerAccountID, &row.WorkspaceName, &row.ProductPresetID, &row.StorageID, &row.ComputeAllocationID, &row.AttachmentID, &row.EntryID, &row.OperationID, &row.State)
 	return row, err
 }
 
@@ -484,9 +484,9 @@ ON CONFLICT (id) DO NOTHING
 	return err
 }
 
-func insertComputeResource(ctx context.Context, tx pgx.Tx, row ComputeResourceRow) error {
+func insertComputeAllocation(ctx context.Context, tx pgx.Tx, row ComputeAllocationRow) error {
 	_, err := tx.Exec(ctx, `
-INSERT INTO compute_resources (id, owner_account_id, product_preset_id, compute_shape_json, provider_instance_type, capacity_pool_id, isolation_mode, node_pool_id, runtime_ref, state, provider_ref)
+INSERT INTO compute_allocations (id, owner_account_id, product_preset_id, compute_shape_json, provider_instance_type, capacity_pool_id, isolation_mode, node_pool_id, runtime_ref, state, provider_ref)
 VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (id) DO NOTHING
 `, row.ID, row.OwnerAccountID, row.ProductPresetID, defaultJSON(row.ComputeShapeJSON), row.ProviderInstanceType, row.CapacityPoolID, row.IsolationMode, row.NodePoolID, row.RuntimeRef, row.State, row.ProviderRef)
@@ -495,10 +495,10 @@ ON CONFLICT (id) DO NOTHING
 
 func insertStorageAttachment(ctx context.Context, tx pgx.Tx, row StorageAttachmentRow) error {
 	_, err := tx.Exec(ctx, `
-INSERT INTO storage_attachments (id, owner_account_id, compute_id, storage_id, state, mount_path, provider_ref)
+INSERT INTO storage_attachments (id, owner_account_id, compute_allocation_id, storage_id, state, mount_path, provider_ref)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
-`, row.ID, row.OwnerAccountID, row.ComputeID, row.StorageID, row.State, row.MountPath, row.ProviderRef)
+`, row.ID, row.OwnerAccountID, row.ComputeAllocationID, row.StorageID, row.State, row.MountPath, row.ProviderRef)
 	return err
 }
 
@@ -513,10 +513,10 @@ ON CONFLICT (id) DO NOTHING
 
 func insertWorkspace(ctx context.Context, tx pgx.Tx, row WorkspaceRow) error {
 	_, err := tx.Exec(ctx, `
-INSERT INTO workspaces (id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_id, attachment_id, entry_id, operation_id, state)
+INSERT INTO workspaces (id, owner_account_id, workspace_name, product_preset_id, storage_id, compute_allocation_id, attachment_id, entry_id, operation_id, state)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (id) DO NOTHING
-`, row.ID, row.OwnerAccountID, row.WorkspaceName, row.ProductPresetID, row.StorageID, row.ComputeID, row.AttachmentID, row.EntryID, row.OperationID, row.State)
+`, row.ID, row.OwnerAccountID, row.WorkspaceName, row.ProductPresetID, row.StorageID, row.ComputeAllocationID, row.AttachmentID, row.EntryID, row.OperationID, row.State)
 	return err
 }
 

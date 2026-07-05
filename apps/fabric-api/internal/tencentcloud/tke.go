@@ -63,7 +63,7 @@ type NodePoolProvider struct {
 }
 
 type NodePoolRequest struct {
-	ComputeID                 string
+	ComputeAllocationID       string
 	WorkspaceID               string
 	RequestedComputeShapeJSON string
 	ProviderInstanceType      string
@@ -150,11 +150,11 @@ func (p NodePoolProvider) EnsureNodePool(ctx context.Context, req NodePoolReques
 	}
 	request := tke.NewCreateNodePoolRequest()
 	request.ClusterId = common.StringPtr(plan.ClusterID)
-	request.Name = common.StringPtr(nodePoolName(req.ComputeID))
+	request.Name = common.StringPtr(nodePoolName(req.ComputeAllocationID))
 	request.Type = common.StringPtr("Native")
 	request.DeletionProtection = common.BoolPtr(false)
 	request.Labels = []*tke.Label{
-		{Name: common.StringPtr("oplfabric.cn/compute-id"), Value: common.StringPtr(req.ComputeID)},
+		{Name: common.StringPtr("oplfabric.cn/compute-id"), Value: common.StringPtr(req.ComputeAllocationID)},
 		{Name: common.StringPtr("oplfabric.cn/workspace-id"), Value: common.StringPtr(req.WorkspaceID)},
 		{Name: common.StringPtr("oplfabric.cn/instance-type"), Value: common.StringPtr(req.ProviderInstanceType)},
 	}

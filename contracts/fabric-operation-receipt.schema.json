@@ -11,10 +11,10 @@
     "resourceKind": {
       "enum": [
         "storage_volume",
-        "compute_resource",
+        "compute_allocation",
         "storage_attachment",
         "workspace_entry",
-        "compute_destroy",
+        "compute_allocation_destroy",
         "storage_destroy",
         "attachment_detach"
       ]

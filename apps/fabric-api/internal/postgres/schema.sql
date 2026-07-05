@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS compute_resources (
+CREATE TABLE IF NOT EXISTS compute_allocations (
   id TEXT PRIMARY KEY,
   owner_account_id TEXT NOT NULL,
   product_preset_id TEXT NOT NULL DEFAULT '',
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS storage_volumes (
 CREATE TABLE IF NOT EXISTS storage_attachments (
   id TEXT PRIMARY KEY,
   owner_account_id TEXT NOT NULL,
-  compute_id TEXT NOT NULL REFERENCES compute_resources(id),
+  compute_allocation_id TEXT NOT NULL REFERENCES compute_allocations(id),
   storage_id TEXT NOT NULL REFERENCES storage_volumes(id),
   state TEXT NOT NULL,
   mount_path TEXT NOT NULL,
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   workspace_name TEXT NOT NULL,
   product_preset_id TEXT NOT NULL DEFAULT '',
   storage_id TEXT NOT NULL REFERENCES storage_volumes(id),
-  compute_id TEXT NOT NULL REFERENCES compute_resources(id),
+  compute_allocation_id TEXT NOT NULL REFERENCES compute_allocations(id),
   attachment_id TEXT NOT NULL REFERENCES storage_attachments(id),
   entry_id TEXT NOT NULL REFERENCES workspace_entries(id),
   operation_id TEXT NOT NULL REFERENCES fabric_operations(id),

@@ -4,7 +4,7 @@
   "title": "Fabric Workspace",
   "type": "object",
   "additionalProperties": false,
-  "required": ["workspaceId", "state", "storage", "compute", "attachment", "entry", "operationId"],
+  "required": ["workspaceId", "state", "storage", "computeAllocation", "attachment", "entry", "operationId"],
   "properties": {
     "workspaceId": { "type": "string", "minLength": 1 },
     "state": { "type": "string", "enum": ["provisioning", "running", "blocked", "failed", "destroyed"] },
@@ -19,7 +19,7 @@
         "sizeGb": { "type": "integer", "minimum": 1 }
       }
     },
-    "compute": {
+    "computeAllocation": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "state"],

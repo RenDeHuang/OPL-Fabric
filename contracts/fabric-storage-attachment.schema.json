@@ -4,10 +4,10 @@
   "title": "Fabric Storage Attachment",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "computeId", "storageId", "state", "mountPath", "providerRef"],
+  "required": ["id", "computeAllocationId", "storageId", "state", "mountPath", "providerRef"],
   "properties": {
     "id": { "type": "string", "minLength": 1 },
-    "computeId": { "type": "string", "minLength": 1 },
+    "computeAllocationId": { "type": "string", "minLength": 1 },
     "storageId": { "type": "string", "minLength": 1 },
     "state": { "type": "string", "minLength": 1 },
     "mountPath": { "type": "string", "minLength": 1 },

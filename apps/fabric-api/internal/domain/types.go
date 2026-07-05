@@ -5,12 +5,12 @@ type StorageState string
 type OperationState string
 
 const (
-	ComputeCreating        ComputeState = "creating"
-	ComputeRunning         ComputeState = "running"
-	ComputeDestroying      ComputeState = "destroying"
-	ComputeDestroyed       ComputeState = "destroyed"
-	ComputeFailed          ComputeState = "failed"
-	ComputeCleanupRequired ComputeState = "cleanup_required"
+	ComputeCreating             ComputeState = "creating"
+	ComputeRunning              ComputeState = "running"
+	ComputeAllocationDestroying ComputeState = "destroying"
+	ComputeAllocationDestroyed  ComputeState = "destroyed"
+	ComputeFailed               ComputeState = "failed"
+	ComputeCleanupRequired      ComputeState = "cleanup_required"
 )
 
 const (
@@ -37,7 +37,7 @@ const (
 	OperationNeedsHumanGate OperationState = "needs_human_gate"
 )
 
-type ComputeResource struct {
+type ComputeAllocation struct {
 	ID                   string
 	OwnerAccountID       string
 	ProductPresetID      string
@@ -62,12 +62,12 @@ type StorageVolume struct {
 }
 
 type StorageAttachment struct {
-	ID          string
-	ComputeID   string
-	StorageID   string
-	State       StorageState
-	MountPath   string
-	ProviderRef string
+	ID                  string
+	ComputeAllocationID string
+	StorageID           string
+	State               StorageState
+	MountPath           string
+	ProviderRef         string
 }
 
 type WorkspaceEntry struct {
@@ -86,7 +86,7 @@ type DestroyStorageRequest struct {
 }
 
 type DestroyResult struct {
-	Compute ComputeResource
+	Compute ComputeAllocation
 	Storage StorageVolume
 }
 

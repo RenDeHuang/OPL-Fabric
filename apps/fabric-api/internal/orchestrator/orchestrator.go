@@ -14,8 +14,8 @@ type Store interface {
 	UpdateOperationState(context.Context, string, string) error
 	GetStorageVolume(context.Context, string) (postgres.StorageVolumeRow, error)
 	UpdateStorageVolume(context.Context, postgres.StorageVolumeRow) error
-	GetComputeResource(context.Context, string) (postgres.ComputeResourceRow, error)
-	UpdateComputeResource(context.Context, postgres.ComputeResourceRow) error
+	GetComputeAllocation(context.Context, string) (postgres.ComputeAllocationRow, error)
+	UpdateComputeAllocation(context.Context, postgres.ComputeAllocationRow) error
 	GetStorageAttachment(context.Context, string) (postgres.StorageAttachmentRow, error)
 	UpdateStorageAttachment(context.Context, postgres.StorageAttachmentRow) error
 	GetWorkspaceEntry(context.Context, string) (postgres.WorkspaceEntryRow, error)
@@ -26,10 +26,10 @@ type Store interface {
 
 type Runtime interface {
 	CreateStorageVolume(context.Context, postgres.StorageVolumeRow) (RuntimeStorageResult, error)
-	CreateCompute(context.Context, postgres.ComputeResourceRow) (RuntimeComputeResult, error)
+	CreateCompute(context.Context, postgres.ComputeAllocationRow) (RuntimeComputeResult, error)
 	AttachStorage(context.Context, postgres.StorageAttachmentRow) (RuntimeAttachmentResult, error)
 	CreateWorkspaceEntry(context.Context, postgres.WorkspaceEntryRow) error
-	DestroyCompute(context.Context, postgres.ComputeResourceRow) error
+	DestroyCompute(context.Context, postgres.ComputeAllocationRow) error
 	DestroyStorage(context.Context, postgres.StorageVolumeRow) error
 	DetachStorage(context.Context, postgres.StorageAttachmentRow) error
 }
@@ -82,16 +82,16 @@ func (o Orchestrator) apply(ctx context.Context, op postgres.OperationRow) error
 	switch op.ResourceKind {
 	case "storage_volume":
 		return o.applyStorageVolume(ctx, op.ResourceID)
-	case "compute_resource":
-		return o.applyComputeResource(ctx, op.ResourceID)
+	case "compute_allocation":
+		return o.applyComputeAllocation(ctx, op.ResourceID)
 	case "storage_attachment":
 		return o.applyStorageAttachment(ctx, op.ResourceID)
 	case "workspace_entry":
 		return o.applyWorkspaceEntry(ctx, op.ResourceID)
 	case "workspace":
 		return o.applyWorkspace(ctx, op.ResourceID)
-	case "compute_destroy":
-		return o.applyComputeDestroy(ctx, op.ResourceID)
+	case "compute_allocation_destroy":
+		return o.applyComputeAllocationDestroy(ctx, op.ResourceID)
 	case "storage_destroy":
 		return o.applyStorageDestroy(ctx, op.ResourceID)
 	case "attachment_detach":
@@ -115,8 +115,8 @@ func (o Orchestrator) applyStorageVolume(ctx context.Context, id string) error {
 	return o.Store.UpdateStorageVolume(ctx, row)
 }
 
-func (o Orchestrator) applyComputeResource(ctx context.Context, id string) error {
-	row, err := o.Store.GetComputeResource(ctx, id)
+func (o Orchestrator) applyComputeAllocation(ctx context.Context, id string) error {
+	row, err := o.Store.GetComputeAllocation(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func (o Orchestrator) applyComputeResource(ctx context.Context, id string) error
 	row.RuntimeRef = result.RuntimeRef
 	row.NodePoolID = result.NodePoolID
 	row.State = "running"
-	return o.Store.UpdateComputeResource(ctx, row)
+	return o.Store.UpdateComputeAllocation(ctx, row)
 }
 
 func (o Orchestrator) applyStorageAttachment(ctx context.Context, id string) error {
@@ -169,10 +169,10 @@ func (o Orchestrator) applyWorkspace(ctx context.Context, id string) error {
 	if err := o.applyStorageVolume(ctx, workspace.StorageID); err != nil {
 		return err
 	}
-	if err := o.applyComputeResource(ctx, workspace.ComputeID); err != nil {
+	if err := o.applyComputeAllocation(ctx, workspace.ComputeAllocationID); err != nil {
 		return err
 	}
-	compute, err := o.Store.GetComputeResource(ctx, workspace.ComputeID)
+	compute, err := o.Store.GetComputeAllocation(ctx, workspace.ComputeAllocationID)
 	if err != nil {
 		return err
 	}
@@ -206,8 +206,8 @@ func (o Orchestrator) applyWorkspace(ctx context.Context, id string) error {
 	return o.Store.UpdateWorkspace(ctx, workspace)
 }
 
-func (o Orchestrator) applyComputeDestroy(ctx context.Context, id string) error {
-	row, err := o.Store.GetComputeResource(ctx, id)
+func (o Orchestrator) applyComputeAllocationDestroy(ctx context.Context, id string) error {
+	row, err := o.Store.GetComputeAllocation(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func (o Orchestrator) applyComputeDestroy(ctx context.Context, id string) error 
 	row.ProviderRef = ""
 	row.RuntimeRef = ""
 	row.NodePoolID = ""
-	return o.Store.UpdateComputeResource(ctx, row)
+	return o.Store.UpdateComputeAllocation(ctx, row)
 }
 
 func (o Orchestrator) applyStorageDestroy(ctx context.Context, id string) error {

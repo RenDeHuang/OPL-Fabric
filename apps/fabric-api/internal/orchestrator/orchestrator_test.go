@@ -36,8 +36,8 @@ func TestApplyStorageVolumeOperationCreatesPVCAndMarksSucceeded(t *testing.T) {
 
 func TestApplyComputeOperationCreatesRuntimeAndMarksSucceeded(t *testing.T) {
 	store := newMemoryStore()
-	store.operations["op-1"] = postgres.OperationRow{ID: "op-1", ResourceKind: "compute_resource", ResourceID: "compute-1", State: "accepted"}
-	store.compute["compute-1"] = postgres.ComputeResourceRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating", ComputeShapeJSON: `{"cpu":2,"memoryGb":4}`}
+	store.operations["op-1"] = postgres.OperationRow{ID: "op-1", ResourceKind: "compute_allocation", ResourceID: "compute-1", State: "accepted"}
+	store.compute["compute-1"] = postgres.ComputeAllocationRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating", ComputeShapeJSON: `{"cpu":2,"memoryGb":4}`}
 	runtime := &recordingRuntime{}
 	orch := Orchestrator{Store: store, Runtime: runtime}
 
@@ -52,15 +52,15 @@ func TestApplyComputeOperationCreatesRuntimeAndMarksSucceeded(t *testing.T) {
 	if store.compute["compute-1"].ProviderRef != "deployment/compute-1" || store.compute["compute-1"].RuntimeRef != "service/compute-1" || store.compute["compute-1"].State != "running" {
 		t.Fatalf("compute row = %+v", store.compute["compute-1"])
 	}
-	if runtime.createdComputeID != "compute-1" {
-		t.Fatalf("created compute = %q", runtime.createdComputeID)
+	if runtime.createdComputeAllocationID != "compute-1" {
+		t.Fatalf("created compute = %q", runtime.createdComputeAllocationID)
 	}
 }
 
 func TestApplyComputeOperationPersistsNodePoolID(t *testing.T) {
 	store := newMemoryStore()
-	store.operations["op-1"] = postgres.OperationRow{ID: "op-1", ResourceKind: "compute_resource", ResourceID: "compute-1", State: "accepted"}
-	store.compute["compute-1"] = postgres.ComputeResourceRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating", IsolationMode: "dedicated_nodepool"}
+	store.operations["op-1"] = postgres.OperationRow{ID: "op-1", ResourceKind: "compute_allocation", ResourceID: "compute-1", State: "accepted"}
+	store.compute["compute-1"] = postgres.ComputeAllocationRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating", IsolationMode: "workspace_exclusive_cvm"}
 	runtime := &recordingRuntime{nodePoolID: "np-1"}
 	orch := Orchestrator{Store: store, Runtime: runtime}
 
@@ -76,7 +76,7 @@ func TestApplyComputeOperationPersistsNodePoolID(t *testing.T) {
 func TestApplyAttachmentOperationMountsStorage(t *testing.T) {
 	store := newMemoryStore()
 	store.operations["op-1"] = postgres.OperationRow{ID: "op-1", ResourceKind: "storage_attachment", ResourceID: "attach-1", State: "accepted"}
-	store.attachments["attach-1"] = postgres.StorageAttachmentRow{ID: "attach-1", OwnerAccountID: "acct-1", ComputeID: "compute-1", StorageID: "storage-1", State: "attaching", MountPath: "/data"}
+	store.attachments["attach-1"] = postgres.StorageAttachmentRow{ID: "attach-1", OwnerAccountID: "acct-1", ComputeAllocationID: "compute-1", StorageID: "storage-1", State: "attaching", MountPath: "/data"}
 	runtime := &recordingRuntime{}
 	orch := Orchestrator{Store: store, Runtime: runtime}
 
@@ -117,10 +117,10 @@ func TestApplyWorkspaceOperationRunsStorageComputeAttachmentEntryInOrder(t *test
 	store := newMemoryStore()
 	store.operations["op-workspace"] = postgres.OperationRow{ID: "op-workspace", ResourceKind: "workspace", ResourceID: "ws-1", State: "accepted"}
 	store.storage["storage-1"] = postgres.StorageVolumeRow{ID: "storage-1", OwnerAccountID: "acct-1", SizeGB: 20, State: "creating", Retained: true}
-	store.compute["compute-1"] = postgres.ComputeResourceRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating", ComputeShapeJSON: `{"cpu":2,"memoryGb":4}`}
-	store.attachments["attach-1"] = postgres.StorageAttachmentRow{ID: "attach-1", OwnerAccountID: "acct-1", ComputeID: "compute-1", StorageID: "storage-1", State: "attaching", MountPath: "/data"}
+	store.compute["compute-1"] = postgres.ComputeAllocationRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating", ComputeShapeJSON: `{"cpu":2,"memoryGb":4}`}
+	store.attachments["attach-1"] = postgres.StorageAttachmentRow{ID: "attach-1", OwnerAccountID: "acct-1", ComputeAllocationID: "compute-1", StorageID: "storage-1", State: "attaching", MountPath: "/data"}
 	store.entries["entry-1"] = postgres.WorkspaceEntryRow{ID: "entry-1", OwnerAccountID: "acct-1", WorkspaceID: "ws-1", AttachmentID: "attach-1", State: "creating", Host: "workspace.medopl.cn", Path: "/w/ws-1/"}
-	store.workspaces["ws-1"] = postgres.WorkspaceRow{ID: "ws-1", OwnerAccountID: "acct-1", StorageID: "storage-1", ComputeID: "compute-1", AttachmentID: "attach-1", EntryID: "entry-1", OperationID: "op-workspace", State: "provisioning"}
+	store.workspaces["ws-1"] = postgres.WorkspaceRow{ID: "ws-1", OwnerAccountID: "acct-1", StorageID: "storage-1", ComputeAllocationID: "compute-1", AttachmentID: "attach-1", EntryID: "entry-1", OperationID: "op-workspace", State: "provisioning"}
 	runtime := &recordingRuntime{}
 	orch := Orchestrator{Store: store, Runtime: runtime}
 
@@ -159,10 +159,10 @@ func TestApplyWorkspaceOperationFailureLeavesStorageRetained(t *testing.T) {
 	store := newMemoryStore()
 	store.operations["op-workspace"] = postgres.OperationRow{ID: "op-workspace", ResourceKind: "workspace", ResourceID: "ws-1", State: "accepted"}
 	store.storage["storage-1"] = postgres.StorageVolumeRow{ID: "storage-1", OwnerAccountID: "acct-1", SizeGB: 20, State: "creating", Retained: true}
-	store.compute["compute-1"] = postgres.ComputeResourceRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating"}
-	store.attachments["attach-1"] = postgres.StorageAttachmentRow{ID: "attach-1", OwnerAccountID: "acct-1", ComputeID: "compute-1", StorageID: "storage-1", State: "attaching", MountPath: "/data"}
+	store.compute["compute-1"] = postgres.ComputeAllocationRow{ID: "compute-1", OwnerAccountID: "acct-1", State: "creating"}
+	store.attachments["attach-1"] = postgres.StorageAttachmentRow{ID: "attach-1", OwnerAccountID: "acct-1", ComputeAllocationID: "compute-1", StorageID: "storage-1", State: "attaching", MountPath: "/data"}
 	store.entries["entry-1"] = postgres.WorkspaceEntryRow{ID: "entry-1", OwnerAccountID: "acct-1", WorkspaceID: "ws-1", AttachmentID: "attach-1", State: "creating"}
-	store.workspaces["ws-1"] = postgres.WorkspaceRow{ID: "ws-1", StorageID: "storage-1", ComputeID: "compute-1", AttachmentID: "attach-1", EntryID: "entry-1", OperationID: "op-workspace", State: "provisioning"}
+	store.workspaces["ws-1"] = postgres.WorkspaceRow{ID: "ws-1", StorageID: "storage-1", ComputeAllocationID: "compute-1", AttachmentID: "attach-1", EntryID: "entry-1", OperationID: "op-workspace", State: "provisioning"}
 	runtimeErr := errors.New("compute_failed")
 	orch := Orchestrator{Store: store, Runtime: &recordingRuntime{computeErr: runtimeErr}}
 
@@ -186,9 +186,9 @@ func TestApplyWorkspaceOperationFailureLeavesStorageRetained(t *testing.T) {
 
 func TestApplyDestroyOperationsCallRuntimeWithoutDeletingRetainedStorage(t *testing.T) {
 	store := newMemoryStore()
-	store.operations["op-compute"] = postgres.OperationRow{ID: "op-compute", ResourceKind: "compute_destroy", ResourceID: "compute-1", State: "accepted"}
+	store.operations["op-compute"] = postgres.OperationRow{ID: "op-compute", ResourceKind: "compute_allocation_destroy", ResourceID: "compute-1", State: "accepted"}
 	store.operations["op-storage"] = postgres.OperationRow{ID: "op-storage", ResourceKind: "storage_destroy", ResourceID: "storage-1", State: "accepted"}
-	store.compute["compute-1"] = postgres.ComputeResourceRow{ID: "compute-1", State: "running", ProviderRef: "deployment/compute-1", RuntimeRef: "service/compute-1", NodePoolID: "np-1"}
+	store.compute["compute-1"] = postgres.ComputeAllocationRow{ID: "compute-1", State: "running", ProviderRef: "deployment/compute-1", RuntimeRef: "service/compute-1", NodePoolID: "np-1"}
 	store.storage["storage-1"] = postgres.StorageVolumeRow{ID: "storage-1", State: "available", ProviderRef: "pvc/storage-1", Retained: true}
 	runtime := &recordingRuntime{}
 	orch := Orchestrator{Store: store, Runtime: runtime}
@@ -200,8 +200,8 @@ func TestApplyDestroyOperationsCallRuntimeWithoutDeletingRetainedStorage(t *test
 		t.Fatalf("Apply storage destroy: %v", err)
 	}
 
-	if store.compute["compute-1"].State != "destroyed" || runtime.destroyedComputeID != "compute-1" {
-		t.Fatalf("compute destroy failed: row=%+v runtime=%q", store.compute["compute-1"], runtime.destroyedComputeID)
+	if store.compute["compute-1"].State != "destroyed" || runtime.destroyedComputeAllocationID != "compute-1" {
+		t.Fatalf("compute destroy failed: row=%+v runtime=%q", store.compute["compute-1"], runtime.destroyedComputeAllocationID)
 	}
 	if store.compute["compute-1"].ProviderRef != "" || store.compute["compute-1"].RuntimeRef != "" || store.compute["compute-1"].NodePoolID != "" {
 		t.Fatalf("compute refs should be cleared for rebuild: %+v", store.compute["compute-1"])
@@ -246,7 +246,7 @@ func TestApplyMarksOperationFailedWhenRuntimeFails(t *testing.T) {
 type memoryStore struct {
 	operations  map[string]postgres.OperationRow
 	storage     map[string]postgres.StorageVolumeRow
-	compute     map[string]postgres.ComputeResourceRow
+	compute     map[string]postgres.ComputeAllocationRow
 	attachments map[string]postgres.StorageAttachmentRow
 	entries     map[string]postgres.WorkspaceEntryRow
 	workspaces  map[string]postgres.WorkspaceRow
@@ -256,7 +256,7 @@ func newMemoryStore() *memoryStore {
 	return &memoryStore{
 		operations:  map[string]postgres.OperationRow{},
 		storage:     map[string]postgres.StorageVolumeRow{},
-		compute:     map[string]postgres.ComputeResourceRow{},
+		compute:     map[string]postgres.ComputeAllocationRow{},
 		attachments: map[string]postgres.StorageAttachmentRow{},
 		entries:     map[string]postgres.WorkspaceEntryRow{},
 		workspaces:  map[string]postgres.WorkspaceRow{},
@@ -283,11 +283,11 @@ func (s *memoryStore) UpdateStorageVolume(_ context.Context, row postgres.Storag
 	return nil
 }
 
-func (s *memoryStore) GetComputeResource(_ context.Context, id string) (postgres.ComputeResourceRow, error) {
+func (s *memoryStore) GetComputeAllocation(_ context.Context, id string) (postgres.ComputeAllocationRow, error) {
 	return s.compute[id], nil
 }
 
-func (s *memoryStore) UpdateComputeResource(_ context.Context, row postgres.ComputeResourceRow) error {
+func (s *memoryStore) UpdateComputeAllocation(_ context.Context, row postgres.ComputeAllocationRow) error {
 	s.compute[row.ID] = row
 	return nil
 }
@@ -320,18 +320,18 @@ func (s *memoryStore) UpdateWorkspace(_ context.Context, row postgres.WorkspaceR
 }
 
 type recordingRuntime struct {
-	err                      error
-	computeErr               error
-	nodePoolID               string
-	calls                    []string
-	createdStorageID         string
-	createdComputeID         string
-	attachedID               string
-	workspaceEntryID         string
-	workspaceEntryServiceRef string
-	destroyedComputeID       string
-	destroyedStorageID       string
-	detachedID               string
+	err                          error
+	computeErr                   error
+	nodePoolID                   string
+	calls                        []string
+	createdStorageID             string
+	createdComputeAllocationID   string
+	attachedID                   string
+	workspaceEntryID             string
+	workspaceEntryServiceRef     string
+	destroyedComputeAllocationID string
+	destroyedStorageID           string
+	detachedID                   string
 }
 
 func (r *recordingRuntime) CreateStorageVolume(_ context.Context, row postgres.StorageVolumeRow) (RuntimeStorageResult, error) {
@@ -343,7 +343,7 @@ func (r *recordingRuntime) CreateStorageVolume(_ context.Context, row postgres.S
 	return RuntimeStorageResult{ProviderRef: "pvc/" + row.ID}, nil
 }
 
-func (r *recordingRuntime) CreateCompute(_ context.Context, row postgres.ComputeResourceRow) (RuntimeComputeResult, error) {
+func (r *recordingRuntime) CreateCompute(_ context.Context, row postgres.ComputeAllocationRow) (RuntimeComputeResult, error) {
 	if r.err != nil {
 		return RuntimeComputeResult{}, r.err
 	}
@@ -351,7 +351,7 @@ func (r *recordingRuntime) CreateCompute(_ context.Context, row postgres.Compute
 		return RuntimeComputeResult{}, r.computeErr
 	}
 	r.calls = append(r.calls, "compute:"+row.ID)
-	r.createdComputeID = row.ID
+	r.createdComputeAllocationID = row.ID
 	return RuntimeComputeResult{ProviderRef: "deployment/" + row.ID, RuntimeRef: "service/" + row.ID, NodePoolID: r.nodePoolID}, nil
 }
 
@@ -374,11 +374,11 @@ func (r *recordingRuntime) CreateWorkspaceEntry(_ context.Context, row postgres.
 	return nil
 }
 
-func (r *recordingRuntime) DestroyCompute(_ context.Context, row postgres.ComputeResourceRow) error {
+func (r *recordingRuntime) DestroyCompute(_ context.Context, row postgres.ComputeAllocationRow) error {
 	if r.err != nil {
 		return r.err
 	}
-	r.destroyedComputeID = row.ID
+	r.destroyedComputeAllocationID = row.ID
 	return nil
 }
 

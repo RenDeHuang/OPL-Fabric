@@ -196,7 +196,7 @@ type capacityAdapter struct {
 
 func (a capacityAdapter) EnsureNodePool(ctx context.Context, req fabricruntime.CapacityNodePoolRequest) (fabricruntime.CapacityNodePoolResult, error) {
 	result, err := a.provider.EnsureNodePool(ctx, tencentcloud.NodePoolRequest{
-		ComputeID:                 req.ComputeID,
+		ComputeAllocationID:       req.ComputeAllocationID,
 		WorkspaceID:               req.WorkspaceID,
 		RequestedComputeShapeJSON: req.RequestedComputeShapeJSON,
 		ProviderInstanceType:      req.ProviderInstanceType,

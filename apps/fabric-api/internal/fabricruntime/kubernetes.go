@@ -20,7 +20,7 @@ type CapacityProvider interface {
 }
 
 type CapacityNodePoolRequest struct {
-	ComputeID                 string
+	ComputeAllocationID       string
 	WorkspaceID               string
 	RequestedComputeShapeJSON string
 	ProviderInstanceType      string
@@ -35,19 +35,11 @@ func (r KubernetesRuntime) CreateStorageVolume(ctx context.Context, row postgres
 	return orchestrator.RuntimeStorageResult{ProviderRef: result.ProviderRef}, err
 }
 
-func (r KubernetesRuntime) CreateCompute(ctx context.Context, row postgres.ComputeResourceRow) (orchestrator.RuntimeComputeResult, error) {
+func (r KubernetesRuntime) CreateCompute(ctx context.Context, row postgres.ComputeAllocationRow) (orchestrator.RuntimeComputeResult, error) {
 	nodePoolID := row.NodePoolID
-	if r.requiresDedicatedNodePool(row) {
+	if r.requiresWorkspaceExclusiveComputePool(row) {
 		if nodePoolID == "" {
-			result, err := r.Capacity.EnsureNodePool(ctx, CapacityNodePoolRequest{
-				ComputeID:                 row.ID,
-				RequestedComputeShapeJSON: row.ComputeShapeJSON,
-				ProviderInstanceType:      row.ProviderInstanceType,
-			})
-			if err != nil {
-				return orchestrator.RuntimeComputeResult{}, err
-			}
-			nodePoolID = result.NodePoolID
+			return orchestrator.RuntimeComputeResult{}, ErrComputePoolRequired
 		}
 		verified, err := r.Capacity.VerifyNodePool(ctx, nodePoolID)
 		if err != nil {
@@ -71,7 +63,7 @@ func (r KubernetesRuntime) CreateCompute(ctx context.Context, row postgres.Compu
 }
 
 func (r KubernetesRuntime) AttachStorage(ctx context.Context, row postgres.StorageAttachmentRow) (orchestrator.RuntimeAttachmentResult, error) {
-	computeRef, storageRef := splitProviderRefs(row.ProviderRef, row.ComputeID, row.StorageID)
+	computeRef, storageRef := splitProviderRefs(row.ProviderRef, row.ComputeAllocationID, row.StorageID)
 	result, err := r.Provider.AttachStorage(ctx, fabrick8s.AttachStorageInput{
 		ID:         row.ID,
 		ComputeRef: computeRef,
@@ -91,12 +83,9 @@ func (r KubernetesRuntime) CreateWorkspaceEntry(ctx context.Context, row postgre
 	})
 }
 
-func (r KubernetesRuntime) DestroyCompute(ctx context.Context, row postgres.ComputeResourceRow) error {
+func (r KubernetesRuntime) DestroyCompute(ctx context.Context, row postgres.ComputeAllocationRow) error {
 	if err := r.Provider.DestroyCompute(ctx, fabrick8s.DestroyComputeInput{ProviderRef: row.ProviderRef, RuntimeRef: row.RuntimeRef}); err != nil {
 		return err
-	}
-	if row.NodePoolID != "" && r.Capacity != nil {
-		return r.Capacity.DeleteNodePool(ctx, row.NodePoolID)
 	}
 	return nil
 }
@@ -117,16 +106,19 @@ func defaultString(value, fallback string) string {
 }
 
 var ErrNodePoolNotVerified = errNodePoolNotVerified{}
+var ErrComputePoolRequired = errComputePoolRequired{}
 
 type errNodePoolNotVerified struct{}
+type errComputePoolRequired struct{}
 
 func (errNodePoolNotVerified) Error() string { return "nodepool_not_verified" }
+func (errComputePoolRequired) Error() string { return "compute_pool_required" }
 
-func (r KubernetesRuntime) requiresDedicatedNodePool(row postgres.ComputeResourceRow) bool {
+func (r KubernetesRuntime) requiresWorkspaceExclusiveComputePool(row postgres.ComputeAllocationRow) bool {
 	if r.Capacity == nil {
 		return false
 	}
-	return row.IsolationMode == "dedicated_nodepool" || row.CapacityPoolID == "dedicated-nodepool-template"
+	return row.IsolationMode == "workspace_exclusive_cvm" || row.CapacityPoolID == "tencent-cpu-compute-pool" || row.CapacityPoolID == "tencent-gpu-compute-pool"
 }
 
 func splitProviderRefs(providerRef, computeID, storageID string) (computeRef, storageRef string) {

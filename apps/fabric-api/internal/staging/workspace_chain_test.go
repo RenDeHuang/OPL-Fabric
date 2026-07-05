@@ -39,7 +39,7 @@ func TestFakeWorkspaceChainRunsStorageComputeAttachEntry(t *testing.T) {
 		ComputeShape:         map[string]any{"cpu": 2, "memoryGb": 4},
 		ProviderInstanceType: "SA5.LARGE8",
 		CapacityPoolID:       "shared-basic",
-		IsolationMode:        "shared_pool",
+		IsolationMode:        "workspace_exclusive_cvm",
 		Storage: struct {
 			SizeGB int `json:"sizeGb"`
 		}{SizeGB: 20},
@@ -64,13 +64,13 @@ func TestFakeWorkspaceChainRunsStorageComputeAttachEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Workspace: %v", err)
 	}
-	if workspace.State != "running" || workspace.Storage.State != "available" || workspace.Compute.State != "running" || workspace.Attachment.State != "attached" || workspace.Entry.State != "ready" {
+	if workspace.State != "running" || workspace.Storage.State != "available" || workspace.ComputeAllocation.State != "running" || workspace.Attachment.State != "attached" || workspace.Entry.State != "ready" {
 		t.Fatalf("workspace chain did not complete: %+v", workspace)
 	}
 	if store.operations[receipt.OperationID].State != "succeeded" {
 		t.Fatalf("operation state = %q", store.operations[receipt.OperationID].State)
 	}
-	wantCalls := []string{"storage", "compute", "attach", "entry"}
+	wantCalls := []string{"storage", "computeAllocation", "attach", "entry"}
 	if !reflect.DeepEqual(runtime.calls, wantCalls) {
 		t.Fatalf("runtime calls = %v, want %v", runtime.calls, wantCalls)
 	}
@@ -120,7 +120,7 @@ func TestLiveWorkspaceChainE2EIsGated(t *testing.T) {
 type chainStore struct {
 	operations  map[string]postgres.OperationRow
 	storages    map[string]postgres.StorageVolumeRow
-	computes    map[string]postgres.ComputeResourceRow
+	computes    map[string]postgres.ComputeAllocationRow
 	attachments map[string]postgres.StorageAttachmentRow
 	entries     map[string]postgres.WorkspaceEntryRow
 	workspaces  map[string]postgres.WorkspaceRow
@@ -130,7 +130,7 @@ func newChainStore() *chainStore {
 	return &chainStore{
 		operations:  map[string]postgres.OperationRow{},
 		storages:    map[string]postgres.StorageVolumeRow{},
-		computes:    map[string]postgres.ComputeResourceRow{},
+		computes:    map[string]postgres.ComputeAllocationRow{},
 		attachments: map[string]postgres.StorageAttachmentRow{},
 		entries:     map[string]postgres.WorkspaceEntryRow{},
 		workspaces:  map[string]postgres.WorkspaceRow{},
@@ -215,20 +215,20 @@ func (s *chainStore) UpdateStorageVolume(_ context.Context, row postgres.Storage
 	return nil
 }
 
-func (s *chainStore) CreateComputeResource(_ context.Context, row postgres.ComputeResourceRow) error {
+func (s *chainStore) CreateComputeAllocation(_ context.Context, row postgres.ComputeAllocationRow) error {
 	s.computes[row.ID] = row
 	return nil
 }
 
-func (s *chainStore) GetComputeResource(_ context.Context, id string) (postgres.ComputeResourceRow, error) {
+func (s *chainStore) GetComputeAllocation(_ context.Context, id string) (postgres.ComputeAllocationRow, error) {
 	row, ok := s.computes[id]
 	if !ok {
-		return postgres.ComputeResourceRow{}, errors.New("compute_not_found")
+		return postgres.ComputeAllocationRow{}, errors.New("compute_not_found")
 	}
 	return row, nil
 }
 
-func (s *chainStore) UpdateComputeResource(_ context.Context, row postgres.ComputeResourceRow) error {
+func (s *chainStore) UpdateComputeAllocation(_ context.Context, row postgres.ComputeAllocationRow) error {
 	s.computes[row.ID] = row
 	return nil
 }
@@ -281,7 +281,7 @@ func (s *chainStore) CreateWorkspaceReservation(ctx context.Context, reservation
 	if err := s.CreateStorageVolume(ctx, reservation.Storage); err != nil {
 		return err
 	}
-	if err := s.CreateComputeResource(ctx, reservation.Compute); err != nil {
+	if err := s.CreateComputeAllocation(ctx, reservation.Compute); err != nil {
 		return err
 	}
 	if err := s.CreateStorageAttachment(ctx, reservation.Attachment); err != nil {
@@ -315,8 +315,8 @@ func (r *recordingChainRuntime) CreateStorageVolume(_ context.Context, row postg
 	return orchestrator.RuntimeStorageResult{ProviderRef: "pvc/" + row.ID}, nil
 }
 
-func (r *recordingChainRuntime) CreateCompute(_ context.Context, row postgres.ComputeResourceRow) (orchestrator.RuntimeComputeResult, error) {
-	r.calls = append(r.calls, "compute")
+func (r *recordingChainRuntime) CreateCompute(_ context.Context, row postgres.ComputeAllocationRow) (orchestrator.RuntimeComputeResult, error) {
+	r.calls = append(r.calls, "computeAllocation")
 	return orchestrator.RuntimeComputeResult{ProviderRef: "deployment/" + row.ID, RuntimeRef: "service/" + row.ID}, nil
 }
 
@@ -333,7 +333,7 @@ func (r *recordingChainRuntime) CreateWorkspaceEntry(_ context.Context, row post
 	return nil
 }
 
-func (r *recordingChainRuntime) DestroyCompute(context.Context, postgres.ComputeResourceRow) error {
+func (r *recordingChainRuntime) DestroyCompute(context.Context, postgres.ComputeAllocationRow) error {
 	return nil
 }
 

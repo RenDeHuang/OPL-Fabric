@@ -186,8 +186,8 @@ func run(ctx context.Context) error {
 		ProductPresetID:      stringEnv("OPL_LIVE_E2E_PRODUCT_PRESET_ID", "basic"),
 		ComputeShape:         map[string]any{"cpu": intEnv("OPL_LIVE_E2E_CPU", 2), "memoryGb": intEnv("OPL_LIVE_E2E_MEMORY_GB", 4)},
 		ProviderInstanceType: os.Getenv("OPL_LIVE_E2E_PROVIDER_INSTANCE_TYPE"),
-		CapacityPoolID:       stringEnv("OPL_LIVE_E2E_CAPACITY_POOL_ID", "dedicated-nodepool-template"),
-		IsolationMode:        stringEnv("OPL_LIVE_E2E_ISOLATION_MODE", "dedicated_nodepool"),
+		CapacityPoolID:       stringEnv("OPL_LIVE_E2E_CAPACITY_POOL_ID", "tencent-cpu-compute-pool"),
+		IsolationMode:        stringEnv("OPL_LIVE_E2E_ISOLATION_MODE", "workspace_exclusive_cvm"),
 		Storage: struct {
 			SizeGB int `json:"sizeGb"`
 		}{SizeGB: intEnv("OPL_LIVE_E2E_STORAGE_GB", 20)},
@@ -210,7 +210,7 @@ func run(ctx context.Context) error {
 	}
 	log.Printf("workspace running id=%s url=%s operation=%s", workspace.WorkspaceID, workspace.Entry.URL, workspace.OperationID)
 
-	destroyReceipt, err := svc.AcceptComputeDestroy(ctx, service.MutationHeaders{IdempotencyKey: idem + "-destroy-compute", CorrelationID: "corr-" + idem + "-destroy-compute"}, workspace.Compute.ID, service.ConfirmRequest{RequestedBy: "fabric-live-e2e", Confirm: true})
+	destroyReceipt, err := svc.AcceptComputeAllocationDestroy(ctx, service.MutationHeaders{IdempotencyKey: idem + "-destroy-compute", CorrelationID: "corr-" + idem + "-destroy-compute"}, workspace.ComputeAllocation.ID, service.ConfirmRequest{RequestedBy: "fabric-live-e2e", Confirm: true})
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func run(ctx context.Context) error {
 	if err := verifyStorageRetained(ctx, k8sClient, cfg.KubernetesNamespace, store, workspace.WorkspaceID); err != nil {
 		return err
 	}
-	log.Printf("compute destroyed and storage retained workspace=%s compute=%s", workspace.WorkspaceID, workspace.Compute.ID)
+	log.Printf("compute destroyed and storage retained workspace=%s compute=%s", workspace.WorkspaceID, workspace.ComputeAllocation.ID)
 
 	rebuildOperationID := "op-" + idem + "-rebuild-compute"
 	if err := store.CreateOperation(ctx, postgres.OperationRow{
@@ -228,8 +228,8 @@ func run(ctx context.Context) error {
 		CorrelationID:  "corr-" + idem + "-rebuild-compute",
 		IdempotencyKey: idem + "-rebuild-compute",
 		RequestedBy:    "fabric-live-e2e",
-		ResourceID:     workspace.Compute.ID,
-		ResourceKind:   "compute_resource",
+		ResourceID:     workspace.ComputeAllocation.ID,
+		ResourceKind:   "compute_allocation",
 		State:          "accepted",
 	}); err != nil {
 		return err
@@ -240,7 +240,7 @@ func run(ctx context.Context) error {
 	if err := verifyWorkspaceObjects(ctx, k8sClient, cfg.KubernetesNamespace, store, workspace.WorkspaceID); err != nil {
 		return err
 	}
-	log.Printf("compute rebuilt and storage remounted workspace=%s compute=%s", workspace.WorkspaceID, workspace.Compute.ID)
+	log.Printf("compute rebuilt and storage remounted workspace=%s compute=%s", workspace.WorkspaceID, workspace.ComputeAllocation.ID)
 	return nil
 }
 
@@ -493,7 +493,7 @@ func verifyWorkspaceObjects(ctx context.Context, client kubernetes.Interface, na
 	if err != nil {
 		return err
 	}
-	compute, err := store.GetComputeResource(ctx, workspace.ComputeID)
+	compute, err := store.GetComputeAllocation(ctx, workspace.ComputeAllocationID)
 	if err != nil {
 		return err
 	}
@@ -535,7 +535,7 @@ func verifyStorageRetained(ctx context.Context, client kubernetes.Interface, nam
 	if err != nil {
 		return err
 	}
-	compute, err := store.GetComputeResource(ctx, workspace.ComputeID)
+	compute, err := store.GetComputeAllocation(ctx, workspace.ComputeAllocationID)
 	if err != nil {
 		return err
 	}
@@ -690,7 +690,7 @@ type capacityAdapter struct {
 
 func (a capacityAdapter) EnsureNodePool(ctx context.Context, req fabricruntime.CapacityNodePoolRequest) (fabricruntime.CapacityNodePoolResult, error) {
 	result, err := a.provider.EnsureNodePool(ctx, tencentcloud.NodePoolRequest{
-		ComputeID:                 req.ComputeID,
+		ComputeAllocationID:       req.ComputeAllocationID,
 		WorkspaceID:               req.WorkspaceID,
 		RequestedComputeShapeJSON: req.RequestedComputeShapeJSON,
 		ProviderInstanceType:      req.ProviderInstanceType,
@@ -698,7 +698,7 @@ func (a capacityAdapter) EnsureNodePool(ctx context.Context, req fabricruntime.C
 	if err != nil {
 		return fabricruntime.CapacityNodePoolResult{}, err
 	}
-	log.Printf("nodepool created compute=%s workspace=%s nodePoolID=%s providerInstanceType=%s", req.ComputeID, req.WorkspaceID, result.NodePoolID, req.ProviderInstanceType)
+	log.Printf("nodepool created compute=%s workspace=%s nodePoolID=%s providerInstanceType=%s", req.ComputeAllocationID, req.WorkspaceID, result.NodePoolID, req.ProviderInstanceType)
 	return fabricruntime.CapacityNodePoolResult{NodePoolID: result.NodePoolID}, nil
 }
 

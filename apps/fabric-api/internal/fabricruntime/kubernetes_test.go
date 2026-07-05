@@ -29,7 +29,7 @@ func TestKubernetesRuntimeCreatesStorageAndComputeFromRows(t *testing.T) {
 		t.Fatalf("storage result = %+v", storage)
 	}
 
-	compute, err := runtime.CreateCompute(context.Background(), postgres.ComputeResourceRow{ID: "compute-1", ComputeShapeJSON: `{"cpu":2,"memoryGb":4}`})
+	compute, err := runtime.CreateCompute(context.Background(), postgres.ComputeAllocationRow{ID: "compute-1", ComputeShapeJSON: `{"cpu":2,"memoryGb":4}`})
 	if err != nil {
 		t.Fatalf("CreateCompute: %v", err)
 	}
@@ -50,14 +50,14 @@ func TestKubernetesRuntimeAttachesAndDestroysFromRows(t *testing.T) {
 		t.Fatalf("CreateStorageVolume: %v", err)
 	}
 
-	attachment, err := runtime.AttachStorage(context.Background(), postgres.StorageAttachmentRow{ID: "attach-1", ComputeID: "compute-1", StorageID: "storage-1", MountPath: "/data", ProviderRef: compute.ProviderRef + ":" + storage.ProviderRef})
+	attachment, err := runtime.AttachStorage(context.Background(), postgres.StorageAttachmentRow{ID: "attach-1", ComputeAllocationID: "compute-1", StorageID: "storage-1", MountPath: "/data", ProviderRef: compute.ProviderRef + ":" + storage.ProviderRef})
 	if err != nil {
 		t.Fatalf("AttachStorage: %v", err)
 	}
 	if !strings.Contains(attachment.ProviderRef, ":pvc/") {
 		t.Fatalf("attachment result = %+v", attachment)
 	}
-	if err := runtime.DestroyCompute(context.Background(), postgres.ComputeResourceRow{ID: "compute-1", ProviderRef: compute.ProviderRef, RuntimeRef: compute.ServiceRef}); err != nil {
+	if err := runtime.DestroyCompute(context.Background(), postgres.ComputeAllocationRow{ID: "compute-1", ProviderRef: compute.ProviderRef, RuntimeRef: compute.ServiceRef}); err != nil {
 		t.Fatalf("DestroyCompute: %v", err)
 	}
 	if _, err := client.AppsV1().Deployments("opl-fabric").Get(context.Background(), strings.TrimPrefix(compute.ProviderRef, "deployment/"), metav1.GetOptions{}); err == nil {
@@ -65,49 +65,46 @@ func TestKubernetesRuntimeAttachesAndDestroysFromRows(t *testing.T) {
 	}
 }
 
-func TestKubernetesRuntimeCreatesDedicatedNodePoolBeforeCompute(t *testing.T) {
+func TestKubernetesRuntimeRequiresResolvedComputePoolForWorkspaceExclusiveCompute(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	capacity := &recordingCapacity{nodePoolID: "np-1"}
 	runtime := KubernetesRuntime{Provider: fabrick8s.Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace:latest", StorageClassName: "cbs"}, Capacity: capacity}
 
-	result, err := runtime.CreateCompute(context.Background(), postgres.ComputeResourceRow{
+	_, err := runtime.CreateCompute(context.Background(), postgres.ComputeAllocationRow{
 		ID:                   "compute-1",
-		IsolationMode:        "dedicated_nodepool",
+		IsolationMode:        "workspace_exclusive_cvm",
 		ComputeShapeJSON:     `{"cpu":4,"memoryGb":8}`,
 		ProviderInstanceType: "SA5.LARGE8",
 	})
-	if err != nil {
-		t.Fatalf("CreateCompute: %v", err)
+	if !errors.Is(err, ErrComputePoolRequired) {
+		t.Fatalf("CreateCompute error = %v, want %v", err, ErrComputePoolRequired)
 	}
-	if result.NodePoolID != "np-1" {
-		t.Fatalf("NodePoolID = %q, want np-1", result.NodePoolID)
-	}
-	if capacity.createdComputeID != "compute-1" || capacity.verifiedNodePoolID != "np-1" {
+	if capacity.createdComputeAllocationID != "" || capacity.verifiedNodePoolID != "" {
 		t.Fatalf("capacity = %+v", capacity)
 	}
 }
 
-func TestKubernetesRuntimeSkipsCapacityForSharedPoolCompute(t *testing.T) {
+func TestKubernetesRuntimeSkipsCapacityWhenComputeIsNotWorkspaceExclusive(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	capacity := &recordingCapacity{err: errors.New("should_not_call_capacity")}
 	runtime := KubernetesRuntime{Provider: fabrick8s.Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace:latest", StorageClassName: "cbs"}, Capacity: capacity}
 
-	if _, err := runtime.CreateCompute(context.Background(), postgres.ComputeResourceRow{ID: "compute-1", IsolationMode: "shared_pool"}); err != nil {
+	if _, err := runtime.CreateCompute(context.Background(), postgres.ComputeAllocationRow{ID: "compute-1"}); err != nil {
 		t.Fatalf("CreateCompute: %v", err)
 	}
-	if capacity.createdComputeID != "" {
+	if capacity.createdComputeAllocationID != "" {
 		t.Fatalf("capacity should not be called: %+v", capacity)
 	}
 }
 
-func TestKubernetesRuntimeReusesExistingDedicatedNodePoolID(t *testing.T) {
+func TestKubernetesRuntimeReusesExistingComputePoolID(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	capacity := &recordingCapacity{nodePoolID: "np-new"}
 	runtime := KubernetesRuntime{Provider: fabrick8s.Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace:latest", StorageClassName: "cbs"}, Capacity: capacity}
 
-	result, err := runtime.CreateCompute(context.Background(), postgres.ComputeResourceRow{
+	result, err := runtime.CreateCompute(context.Background(), postgres.ComputeAllocationRow{
 		ID:            "compute-1",
-		IsolationMode: "dedicated_nodepool",
+		IsolationMode: "workspace_exclusive_cvm",
 		NodePoolID:    "np-existing",
 	})
 	if err != nil {
@@ -116,7 +113,7 @@ func TestKubernetesRuntimeReusesExistingDedicatedNodePoolID(t *testing.T) {
 	if result.NodePoolID != "np-existing" {
 		t.Fatalf("NodePoolID = %q, want np-existing", result.NodePoolID)
 	}
-	if capacity.createdComputeID != "" {
+	if capacity.createdComputeAllocationID != "" {
 		t.Fatalf("existing nodepool should be reused without ensure: %+v", capacity)
 	}
 	if capacity.verifiedNodePoolID != "np-existing" {
@@ -124,7 +121,7 @@ func TestKubernetesRuntimeReusesExistingDedicatedNodePoolID(t *testing.T) {
 	}
 }
 
-func TestKubernetesRuntimeDeletesDedicatedNodePoolWhenDestroyingCompute(t *testing.T) {
+func TestKubernetesRuntimeDoesNotDeleteComputePoolWhenDestroyingCompute(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	capacity := &recordingCapacity{}
 	runtime := KubernetesRuntime{Provider: fabrick8s.Provider{Client: client, Namespace: "opl-fabric", WorkspaceImage: "workspace:latest", StorageClassName: "cbs"}, Capacity: capacity}
@@ -133,27 +130,27 @@ func TestKubernetesRuntimeDeletesDedicatedNodePoolWhenDestroyingCompute(t *testi
 		t.Fatalf("CreateCompute: %v", err)
 	}
 
-	if err := runtime.DestroyCompute(context.Background(), postgres.ComputeResourceRow{ID: "compute-1", ProviderRef: compute.ProviderRef, RuntimeRef: compute.ServiceRef, NodePoolID: "np-1"}); err != nil {
+	if err := runtime.DestroyCompute(context.Background(), postgres.ComputeAllocationRow{ID: "compute-1", ProviderRef: compute.ProviderRef, RuntimeRef: compute.ServiceRef, NodePoolID: "np-1"}); err != nil {
 		t.Fatalf("DestroyCompute: %v", err)
 	}
-	if capacity.deletedNodePoolID != "np-1" {
-		t.Fatalf("deleted nodepool = %q", capacity.deletedNodePoolID)
+	if capacity.deletedNodePoolID != "" {
+		t.Fatalf("destroying compute allocation must not delete shared compute pool: %+v", capacity)
 	}
 }
 
 type recordingCapacity struct {
-	nodePoolID         string
-	err                error
-	createdComputeID   string
-	verifiedNodePoolID string
-	deletedNodePoolID  string
+	nodePoolID                 string
+	err                        error
+	createdComputeAllocationID string
+	verifiedNodePoolID         string
+	deletedNodePoolID          string
 }
 
 func (c *recordingCapacity) EnsureNodePool(_ context.Context, req CapacityNodePoolRequest) (CapacityNodePoolResult, error) {
 	if c.err != nil {
 		return CapacityNodePoolResult{}, c.err
 	}
-	c.createdComputeID = req.ComputeID
+	c.createdComputeAllocationID = req.ComputeAllocationID
 	return CapacityNodePoolResult{NodePoolID: c.nodePoolID}, nil
 }
 

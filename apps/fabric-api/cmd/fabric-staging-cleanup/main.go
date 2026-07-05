@@ -194,9 +194,9 @@ func discoverFabricNodePoolsFromPostgres(ctx context.Context, databaseURL string
 	defer pool.Close()
 	rows, err := pool.Query(ctx, `
 SELECT DISTINCT node_pool_id
-FROM compute_resources
+FROM compute_allocations
 WHERE node_pool_id <> ''
-  AND (isolation_mode = 'dedicated_nodepool' OR capacity_pool_id = 'dedicated-nodepool-template')
+  AND (isolation_mode = 'workspace_exclusive_cvm' OR capacity_pool_id IN ('tencent-cpu-compute-pool', 'tencent-gpu-compute-pool'))
 `)
 	if err != nil {
 		return nil, err

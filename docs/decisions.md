@@ -41,7 +41,6 @@ This baseline changes the OPL Fabric direction:
 - Storage attachment precedes Workspace entry creation.
 - Workspace entry URLs use the gateway path pattern `/w/<workspaceId>/`.
 - TKE NodePool capacity is a cloud capacity concern, not the Kubernetes runtime object itself.
-- Retired combined-resource and copy-based lifecycle models are not carried forward as compatibility layers.
 - The latest OPL Cloud NodePool goal work was reverted, so OPL Fabric must not import that JavaScript provider/runtime path as its long-term implementation.
 
 The stable implementation stack is fixed as React + TypeScript frontend, Go backend, PostgreSQL durable store, Kubernetes Go client-go runtime provider, Tencent Cloud Go SDK capacity provider, OpenAPI + JSON Schema contracts, and `config/` with `OPL_FABRIC_CONFIG_DIR` for runtime configuration.
@@ -49,6 +48,37 @@ The stable implementation stack is fixed as React + TypeScript frontend, Go back
 Normal runtime must not depend on `kubectl` shell-out, `tccli` shell-out, or JavaScript provider runtime.
 
 The active staging namespace is `opl-fabric`. Staging is allowed to create and delete real Tencent TKE NodePools through the Tencent Cloud Go SDK once the later NodePool resolver phase is implemented.
+
+## 2026-07-05: OPL Cloud compute allocation re-baseline
+
+The active OPL Cloud comparison is:
+
+- Repository: `RenDeHuang/OPL-Cloud`
+- Branch: `main`
+- Commit: `2d2add6fd2d29a32ceaecab42fe9976865eafd3a`
+- Commit date: `2026-07-05T14:11:29+08:00`
+- Commit message: `merge: resource route operation UX alignment`
+- Commit URL: `https://github.com/RenDeHuang/OPL-Cloud/commit/2d2add6fd2d29a32ceaecab42fe9976865eafd3a`
+
+This baseline clarifies the commercial resource model:
+
+- `ComputePool` is a package-level or specification-level Tencent TKE NodePool.
+- `ComputeAllocation` is one account-owned CVM node inside a ComputePool.
+- `StorageVolume` is persistent account-owned storage.
+- `StorageAttachment` mounts one StorageVolume to one ComputeAllocation runtime.
+- `Workspace` is the stable URL/token entry for the attachment and one-person-lab-app runtime.
+
+## 2026-07-05: ComputePool and ComputeAllocation narrative
+
+OPL Fabric manages recoverable personal Workspaces. Each Workspace has retained storage and a stable URL. While active, it receives a workspace-exclusive ComputeAllocation: one account-owned CVM node from a matching ComputePool/NodePool, running one one-person-lab-app runtime with the Workspace storage mounted.
+
+ComputePools are shared by package or provider instance type. A normal Workspace must not own a NodePool. The active model is:
+
+- ComputePool by specification.
+- ComputeAllocation by Workspace.
+- StorageVolume retained across compute destruction.
+- StorageAttachment mounts retained storage to the active ComputeAllocation.
+- Workspace URL remains the user-facing entry while compute can be destroyed and rebuilt.
 
 ## 2026-07-04: Central Fabric config directory
 

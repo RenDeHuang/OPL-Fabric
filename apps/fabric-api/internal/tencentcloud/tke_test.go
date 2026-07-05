@@ -128,7 +128,7 @@ func TestNodePoolProviderRequiresMutationGateForCreateAndDelete(t *testing.T) {
 		},
 	}
 
-	_, err := provider.EnsureNodePool(context.Background(), NodePoolRequest{ComputeID: "compute-1"})
+	_, err := provider.EnsureNodePool(context.Background(), NodePoolRequest{ComputeAllocationID: "compute-1"})
 	if !errors.Is(err, ErrNodePoolMutationNotAllowed) {
 		t.Fatalf("EnsureNodePool error = %v, want %v", err, ErrNodePoolMutationNotAllowed)
 	}
@@ -157,7 +157,7 @@ func TestNodePoolProviderCreatesVerifiesAndDeletesNodePool(t *testing.T) {
 	}
 
 	result, err := provider.EnsureNodePool(context.Background(), NodePoolRequest{
-		ComputeID:                 "compute-1",
+		ComputeAllocationID:       "compute-1",
 		WorkspaceID:               "ws-1",
 		RequestedComputeShapeJSON: `{"cpu":4,"memoryGb":8}`,
 		ProviderInstanceType:      "SA5.LARGE8",
